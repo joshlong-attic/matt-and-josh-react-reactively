@@ -1,6 +1,7 @@
 package com.example.reactiveweb;
 
 import lombok.extern.log4j.Log4j2;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -12,9 +13,11 @@ import reactor.core.publisher.Mono;
 @Service
 class ProfileService {
 
+		private final ApplicationEventPublisher publisher;
 		private final ProfileRepository profileRepository;
 
-		ProfileService(ProfileRepository profileRepository) {
+		ProfileService(ApplicationEventPublisher publisher, ProfileRepository profileRepository) {
+				this.publisher = publisher;
 				this.profileRepository = profileRepository;
 		}
 
@@ -27,7 +30,9 @@ class ProfileService {
 		}
 
 		public Mono<Profile> create(String email) {
-				return this.profileRepository.save(new Profile(null, email));
+				return this.profileRepository
+					.save(new Profile(null, email))
+					.doOnSuccess(profile -> this.publisher.publishEvent( new ProfileCreatedEvent(profile)));
 		}
 
 		public Mono<Profile> update(String id, String email) {
