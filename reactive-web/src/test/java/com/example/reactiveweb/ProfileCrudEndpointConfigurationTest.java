@@ -33,13 +33,10 @@ public class ProfileCrudEndpointConfigurationTest {
 				Mockito
 					.when(this.repository.findAll())
 					.thenReturn(Flux.just(new Profile("1", "A"), new Profile("2", "B")));
-
-
 		}
 
 		@Test
 		public void getAll() {
-
 				this.client
 					.get()
 					.uri("/profiles")
@@ -53,4 +50,6 @@ public class ProfileCrudEndpointConfigurationTest {
 					.jsonPath("$.[1].id").isEqualTo("2")
 					.jsonPath("$.[1].email").isEqualTo("B");
 		}
+
+
 }

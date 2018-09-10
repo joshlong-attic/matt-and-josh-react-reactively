@@ -22,13 +22,12 @@ class ProfileService {
 				return this.profileRepository.findAll();
 		}
 
-		public Mono<Profile> byId(String id) {
+		public Mono<Profile> get(String id) {
 				return this.profileRepository.findById(id);
 		}
 
 		public Mono<Profile> create(String email) {
-				return this.profileRepository
-					.save(new Profile(UUID.randomUUID().toString(), email));
+				return this.profileRepository.save(new Profile(null, email));
 		}
 
 		public Mono<Profile> update(String id, String email) {

@@ -36,7 +36,7 @@ class ProfileCrudEndpointConfiguration {
 		}
 
 		private Mono<ServerResponse> getById(ServerRequest r) {
-				return defaultJsonResponse(this.profileService.byId(id(r)));
+				return defaultJsonResponse(this.profileService.get(id(r)));
 		}
 
 		private Mono<ServerResponse> all(ServerRequest r) {
