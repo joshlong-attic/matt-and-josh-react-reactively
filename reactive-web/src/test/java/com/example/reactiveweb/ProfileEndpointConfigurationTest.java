@@ -1,6 +1,5 @@
 package com.example.reactiveweb;
 
-import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mockito;
@@ -9,11 +8,8 @@ import org.springframework.boot.test.autoconfigure.web.reactive.WebFluxTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
-import org.springframework.http.ReactiveHttpOutputMessage;
 import org.springframework.test.context.junit4.SpringRunner;
 import org.springframework.test.web.reactive.server.WebTestClient;
-import org.springframework.web.reactive.function.BodyInserter;
-import org.springframework.web.reactive.function.BodyInserters;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
@@ -119,7 +115,7 @@ public class ProfileEndpointConfigurationTest {
 
 				Mockito
 					.when(this.repository.findById(data.getId()))
-					.thenReturn(Mono.just(data)) ;
+					.thenReturn(Mono.just(data));
 
 				this.client
 					.get()
@@ -132,21 +128,4 @@ public class ProfileEndpointConfigurationTest {
 					.jsonPath("$.id").isEqualTo(data.getId())
 					.jsonPath("$.email").isEqualTo(data.getEmail());
 		}
-
-/*
-
-
-
-
-		@Test
-		public void getById() {
-				String test = UUID.randomUUID().toString();
-				Mono<Profile> deleted = this.service
-					.create(test)
-					.flatMap(saved -> this.service.get(saved.getId()));
-				StepVerifier
-					.create(deleted)
-					.expectNextMatches(profile -> StringUtils.hasText(profile.getId()) && test.equalsIgnoreCase(profile.getEmail()))
-					.verifyComplete();
-		}*/
 }
