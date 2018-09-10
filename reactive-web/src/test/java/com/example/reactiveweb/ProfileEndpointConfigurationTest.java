@@ -129,8 +129,8 @@ public class ProfileEndpointConfigurationTest {
 					.expectStatus().isOk()
 					.expectHeader().contentType(MediaType.APPLICATION_JSON_UTF8)
 					.expectBody()
-					.jsonPath("$.id").isEqualTo("1")
-					.jsonPath("$.email").isEqualTo("A");
+					.jsonPath("$.id").isEqualTo(data.getId())
+					.jsonPath("$.email").isEqualTo(data.getEmail());
 		}
 
 /*
