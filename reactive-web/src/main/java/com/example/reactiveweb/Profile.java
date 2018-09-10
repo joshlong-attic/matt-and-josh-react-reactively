@@ -17,5 +17,6 @@ class Profile {
 
 		@Id
 		private String id;
+
 		private String email;
 }

@@ -1,5 +1,6 @@
 package com.example.reactiveweb;
 
+import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -9,6 +10,7 @@ import java.util.UUID;
 /**
 	* @author <a href="mailto:josh@joshlong.com">Josh Long</a>
 	*/
+@Log4j2
 @Service
 class ProfileService {
 
