@@ -11,13 +11,11 @@
 
         const socket = new WebSocket('ws://localhost:8080/ws/pp');
 
-    /*    socket.addEventListener('open', function (event) {
+        socket.addEventListener('open', function (event) {
             socket.send(JSON.stringify({'command': 'ping'}))
         });
-*/
         socket.addEventListener('message', function (event) {
-            let data = event.data;
-            console.log('message from server: ', data)
+            console.log('message from server: ', event.data)
         });
 
     });
