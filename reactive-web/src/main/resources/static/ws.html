@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>a simple websocket client</title>
+</head>
+<body>
+<script>
+
+    window.addEventListener('load', function (e) {
+
+        const socket = new WebSocket('ws://localhost:8080/ws/pp');
+
+        socket.addEventListener('open', function (event) {
+            socket.send(JSON.stringify({'command': 'ping'}))
+        });
+
+        socket.addEventListener('message', function (event) {
+            let data = event.data;
+            console.log('message from server: ', data)
+        });
+
+    });
+
+</script>
+</body>
+</html>
