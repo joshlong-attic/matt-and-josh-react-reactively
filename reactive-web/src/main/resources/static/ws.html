@@ -7,18 +7,18 @@
 <body>
 <script lang="text/javascript">
 
-    window.addEventListener('load', function (e) {
+    // window.addEventListener('load', function (e) {
 
-        const socket = new WebSocket('ws://localhost:8080/ws/pp');
+    const socket = new WebSocket('ws://localhost:8080/ws/pp');
 
-        socket.addEventListener('open', function (event) {
-            socket.send(JSON.stringify({'command': 'ping'}))
-        });
-        socket.addEventListener('message', function (event) {
-            console.log('message from server: ', event.data)
-        });
-
+    socket.addEventListener('open', function (event) {
+        socket.send(JSON.stringify({'command': 'ping'}))
     });
+    socket.addEventListener('message', function (event) {
+        console.log('message from server: ', event.data)
+    });
+
+    // });
 
 </script>
 </body>

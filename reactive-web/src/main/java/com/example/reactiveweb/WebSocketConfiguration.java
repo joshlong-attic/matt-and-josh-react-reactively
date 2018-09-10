@@ -83,9 +83,8 @@ class WebSocketConfiguration {
 
 				ObjectMapper objectMapper = new ObjectMapper();
 
-				Flux<ProfileCreatedEvent> publish = Flux.create(profileCreatedEventPublisher);//.publish();
-
 				return session -> {
+						Flux<ProfileCreatedEvent> publish = Flux.create(profileCreatedEventPublisher) .publish().autoConnect();
 						Flux<WebSocketMessage> messageFlux = publish
 							.map(evt -> {
 									try {
