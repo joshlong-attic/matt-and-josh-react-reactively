@@ -77,7 +77,7 @@ public class ProfileEndpointConfigurationTest {
 		public void delete() {
 				Profile data = new Profile("123", UUID.randomUUID().toString() + "@email.com");
 				Mockito
-					.when(this.repository.findById( data.getId()))
+					.when(this.repository.findById(data.getId()))
 					.thenReturn(Mono.just(data));
 				Mockito
 					.when(this.repository.deleteById(data.getId()))
@@ -90,33 +90,53 @@ public class ProfileEndpointConfigurationTest {
 					.expectStatus().isOk();
 		}
 
+		@Test
+		public void update() {
+				Profile data = new Profile("123", UUID.randomUUID().toString() + "@email.com");
+
+				Mockito
+					.when(this.repository.findById(data.getId()))
+					.thenReturn(Mono.just(data));
+
+				Mockito
+					.when(this.repository.save(data))
+					.thenReturn(Mono.just(data));
+
+				this
+					.client
+					.put()
+					.uri("/profiles/" + data.getId())
+					.contentType(MediaType.APPLICATION_JSON_UTF8)
+					.body(Mono.just(data), Profile.class)
+					.exchange()
+					.expectStatus().isOk();
+		}
+
+		@Test
+		public void getById() {
+
+				Profile data = new Profile("1", "A");
+
+				Mockito
+					.when(this.repository.findById(data.getId()))
+					.thenReturn(Mono.just(data)) ;
+
+				this.client
+					.get()
+					.uri("/profiles/" + data.getId())
+					.accept(MediaType.APPLICATION_JSON_UTF8)
+					.exchange()
+					.expectStatus().isOk()
+					.expectHeader().contentType(MediaType.APPLICATION_JSON_UTF8)
+					.expectBody()
+					.jsonPath("$.id").isEqualTo("1")
+					.jsonPath("$.email").isEqualTo("A");
+		}
+
 /*
 
 
-		@Test
-		public void delete() {
-				String test = "test";
-				Mono<Profile> deleted = this.service
-					.create(test)
-					.flatMap(saved -> this.service.delete(saved.getId()));
-				StepVerifier
-					.create(deleted)
-					.expectNextMatches(profile -> profile.getEmail().equalsIgnoreCase(test))
-					.verifyComplete();
-		}
 
-
-
-		@Test
-		public void update() throws Exception {
-				Mono<Profile> saved = this.service
-					.create("test")
-					.flatMap(p -> this.service.update(p.getId(), "test1"));
-				StepVerifier
-					.create(saved)
-					.expectNextMatches(p -> p.getEmail().equalsIgnoreCase("test1"))
-					.verifyComplete();
-		}
 
 		@Test
 		public void getById() {

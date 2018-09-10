@@ -34,7 +34,7 @@ class ProfileEndpointConfiguration {
 					.andRoute(i(GET("/profiles/{id}")), this::getById)
 					.andRoute(i(DELETE("/profiles/{id}")), this::deleteById)
 					.andRoute(i(POST("/profiles")), this::create)
-					.andRoute(i(PUT("/profiles")), this::updateById);
+					.andRoute(i(PUT("/profiles/{id}")), this::updateById);
 		}
 
 		private Mono<ServerResponse> getById(ServerRequest r) {
