@@ -8,8 +8,7 @@ import org.springframework.web.reactive.function.server.support.ServerRequestWra
 import java.net.URI;
 
 /**
-	*
-	* @author <a href="mailto:josh@joshlong.com">Josh Long</a>
+	* Declare your routes using lowercase and this will normalize incoming requests to be lower case.
 	*/
 public class CaseInsensitiveRequestPredicate implements RequestPredicate {
 

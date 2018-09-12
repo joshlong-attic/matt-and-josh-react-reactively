@@ -9,7 +9,7 @@
 
     // window.addEventListener('load', function (e) {
 
-    const socket = new WebSocket('ws://localhost:8080/ws/pp');
+    const socket = new WebSocket('ws://localhost:8080/ws/profiles');
 
     socket.addEventListener('open', function (event) {
         socket.send(JSON.stringify({'command': 'ping'}))

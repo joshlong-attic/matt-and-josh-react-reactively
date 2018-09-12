@@ -1,12 +1,12 @@
 package com.example.reactiveweb;
 
 import lombok.extern.log4j.Log4j2;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.data.mongo.DataMongoTest;
 import org.springframework.context.annotation.Import;
-import org.springframework.test.context.junit4.SpringRunner;
+import org.springframework.test.context.junit.jupiter.SpringExtension;
 import org.springframework.util.StringUtils;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -21,7 +21,7 @@ import java.util.function.Predicate;
 @Log4j2
 @DataMongoTest
 @Import(ProfileService.class)
-@RunWith(SpringRunner.class)
+@ExtendWith(SpringExtension.class)
 public class ProfileServiceTest {
 
 		@Autowired

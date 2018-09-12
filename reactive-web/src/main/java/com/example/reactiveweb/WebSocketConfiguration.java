@@ -37,7 +37,7 @@ class WebSocketConfiguration {
 		HandlerMapping handlerMapping(WebSocketHandler wsh) {
 				return new SimpleUrlHandlerMapping() {
 						{
-								setUrlMap(Collections.singletonMap("/ws/pp", wsh));
+								setUrlMap(Collections.singletonMap("/ws/profiles", wsh));
 								setOrder(10);
 						}
 				};
