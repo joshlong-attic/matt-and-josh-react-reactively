@@ -1,24 +1,24 @@
 package com.example.reactiveweb;
 
 import lombok.extern.log4j.Log4j2;
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.reactivestreams.Publisher;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.http.HttpMethod;
-import org.springframework.http.RequestEntity;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
-import org.springframework.test.web.reactive.server.WebTestClient;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.web.reactive.function.BodyInserters;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.socket.WebSocketMessage;
 import org.springframework.web.reactive.socket.client.ReactorNettyWebSocketClient;
 import org.springframework.web.reactive.socket.client.WebSocketClient;
 import reactor.core.publisher.Flux;
-import reactor.core.publisher.Mono;
 
 import java.net.URI;
+import java.util.UUID;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
 	* @author <a href="mailto:josh@joshlong.com">Josh Long</a>
@@ -28,53 +28,48 @@ import java.net.URI;
 @ExtendWith(SpringExtension.class)
 class WebSocketConfigurationTest {
 
-		private final WebTestClient webTestClient;
-
 		private final WebSocketClient socketClient = new ReactorNettyWebSocketClient();
-
 		private final WebClient webClient = WebClient.builder().build();
+		private final Executor executor = Executors.newCachedThreadPool();
 
-		WebSocketConfigurationTest(@Autowired WebTestClient client) {
-				this.webTestClient = client;
-		}
-
-		Publisher<Profile> write(Profile p) {
-				RestTemplate restTemplate = new RestTemplate();
-				URI uri = URI.create("http://localhost:8080/profiles");
-				// i need to move this back to reactive WebClient, but just to keep things simple for now..
-				restTemplate.exchange(uri, HttpMethod.POST, RequestEntity.post(uri).body(p), String.class);
-				return Mono.just(p);
-		}
-
-//		@Test
+		@Test
 		public void testNotificationsOnUpdates() throws Exception {
 
-				Flux<Profile> written = Flux
-					.<Profile>generate(sink -> sink.next(new Profile("1", "2")))
-					.take(10)
-					.flatMap(this::write)
-					.publish();
+				int count = 10;
 
-				Mono<Void> subscriptions = this.socketClient
-					.execute(URI.create("ws://localhost:8080/ws/profiles"), session -> {
-							return session
-								.send(Flux.just("test").map(session::textMessage))
-								.thenMany(session
-									.receive()
-									.map(WebSocketMessage::getPayloadAsText))
-								.doOnNext(str -> log.info("websocket body: " + str))
-								.then();
-					});
+				Flux<Profile> written = Flux
+					.<Profile>generate(sink -> sink.next(new Profile(UUID.randomUUID().toString(), UUID.randomUUID().toString() + "@email.com")))
+					.take(count)
+					.flatMap(this::write);
+
+				AtomicLong counter = new AtomicLong();
+
+				this.executor.execute(() -> socketClient
+					.execute(URI.create("ws://localhost:8080/ws/profiles"), session -> session
+						.send(Flux.just("test").map(session::textMessage))
+						.thenMany(session
+							.receive()
+							.map(WebSocketMessage::getPayloadAsText))
+						.doOnNext(str -> counter.incrementAndGet())
+						.then())
+					.block()
+				);
 
 				Flux
-					.from(subscriptions)
-					.publish(x -> Flux.just("A", "B"))
+					.from(written)
+					.blockLast();
 
-//					.thenMany(Flux.just("A", "B"))
-					.subscribe(x -> System.out.println("listening to websockets.."));
-
-				Thread.sleep(1000 * 10);
+				Assertions.assertThat(counter.get()).isEqualTo(count);
 		}
 
-
+		private Publisher<Profile> write(Profile p) {
+				return
+					this.webClient
+						.post()
+						.uri("http://localhost:8080/profiles")
+						.body(BodyInserters.fromObject(p))
+						.retrieve()
+						.bodyToMono(String.class)
+						.thenReturn(p);
+		}
 }
