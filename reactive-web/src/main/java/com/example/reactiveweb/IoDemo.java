@@ -11,6 +11,7 @@ import java.nio.channels.CompletionHandler;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.EnumSet;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
@@ -35,80 +36,6 @@ public class IoDemo {
 								doSomethingWithBytes(data);
 						}
 				}
-		}
-
-		private static void asynchronousIoWithFuture(File file) throws Exception {
-				Path path = file.toPath();
-				ByteBuffer allocate = ByteBuffer.allocate(FileCopyUtils.BUFFER_SIZE);
-				AsynchronousFileChannel open = AsynchronousFileChannel.open(path);
-				int pos = 0;
-				do {
-						Future<Integer> read = open.read(allocate, pos);
-						Integer integer = read.get();
-						if (integer < 0) break;
-						pos += integer;
-						allocate.flip();
-						doSomethingWithBytes(allocate.array());
-						allocate.clear();
-				}
-				while (true);
-		}
-
-
-		private static void asynchronousFileIo1(File file) throws Exception {
-				ExecutorService pool = new ScheduledThreadPoolExecutor(3);
-				AsynchronousFileChannel fileChannel = AsynchronousFileChannel
-					.open(file.toPath(), EnumSet.of(StandardOpenOption.READ), pool);
-				CompletionHandler<Integer, ByteBuffer> handler = new CompletionHandler<Integer, ByteBuffer>() {
-						@Override
-						public void completed(Integer result, ByteBuffer attachment) {
-								for (int i = 0; i < attachment.limit(); i++) {
-										System.out.println((char) attachment.get(i));
-								}
-						}
-
-						@Override
-						public void failed(Throwable e, ByteBuffer attachment) {
-						}
-				};
-				final int bufferCount = 5;
-				ByteBuffer buffers[] = new ByteBuffer[bufferCount];
-				for (int i = 0; i < bufferCount; i++) {
-						buffers[i] = ByteBuffer.allocate(10);
-						fileChannel.read(buffers[i], i * 10, buffers[i], handler);
-				}
-
-		}
-
-		@Deprecated
-		private static void asynchronousIo(File file) throws Exception {
-				CompletionHandler<Integer, ByteBuffer> handler = new CompletionHandler<Integer, ByteBuffer>() {
-
-						@Override
-						public void completed(Integer result, ByteBuffer attachment) {
-								attachment.flip();
-								if (attachment.hasRemaining()) {
-										byte[] data = new byte[attachment.remaining()];
-										attachment.get(data);
-										doSomethingWithBytes(data);
-								}
-								attachment.clear();
-						}
-
-						@Override
-						public void failed(Throwable exc, ByteBuffer attachment) {
-								log.error(exc);
-						}
-				};
-
-				try (AsynchronousFileChannel fileChannel =
-										AsynchronousFileChannel.open(file.toPath(), StandardOpenOption.READ)) {
-						ByteBuffer buffer = ByteBuffer.allocate(1024);
-						long position = 0;
-						fileChannel.read(buffer, position, buffer, handler);
-				}
-
-
 		}
 
 		public static void main(String args[]) throws IOException {
@@ -168,6 +95,12 @@ class AsyncFileIo {
 		private static AsynchronousFileChannel fileChannel = null;
 
 		public static void read(File file, Consumer<byte[]> consumer) {
+
+				Callable<String> x = () -> {
+
+						return null;
+				};
+
 				Path path = file.toPath();
 
 				try {
