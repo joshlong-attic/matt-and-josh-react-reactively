@@ -84,10 +84,11 @@ class Synchronous implements Reader {
 
 class Asynchronous implements Reader {
 
-		private final Consumer<BytesPayload> consumer;
 		private int bytesRead = 0;
 		private long position = 0;
 		private AsynchronousFileChannel fileChannel = null;
+
+		private final Consumer<BytesPayload> consumer;
 		private final CompletionHandler<Integer, ByteBuffer> completionHandler =
 			new CompletionHandler<Integer, ByteBuffer>() {
 
