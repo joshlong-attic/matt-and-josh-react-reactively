@@ -1,21 +1,24 @@
 package com.example.reactiveweb;
 
+import lombok.AllArgsConstructor;
+import lombok.Data;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.util.FileCopyUtils;
 import org.springframework.util.ReflectionUtils;
 
-import java.io.*;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.AsynchronousFileChannel;
 import java.nio.channels.CompletionHandler;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
-import java.util.EnumSet;
-import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Future;
-import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.function.Consumer;
+
+interface Reader {
+		void read(File file) throws IOException;
+}
 
 /**
 	* @author <a href="mailto:josh@joshlong.com">Josh Long</a>
@@ -23,30 +26,22 @@ import java.util.function.Consumer;
 @Log4j2
 public class IoDemo {
 
-
-		private static void doSomethingWithBytes(byte bytes[]) {
-				log.info(String.format("new bytes available! got %d bytes.", bytes.length));
-		}
-
-		private static void synchronousIo(File file) throws Exception {
-				try (FileInputStream in = new FileInputStream(file)) {
-						int nRead;
-						byte[] data = new byte[FileCopyUtils.BUFFER_SIZE];
-						while ((nRead = in.read(data, 0, data.length)) != -1) {
-								doSomethingWithBytes(data);
-						}
-				}
-		}
-
 		public static void main(String args[]) throws IOException {
 				try {
-						String home = System.getenv("HOME");
+						String home = System.getProperty("user.home");
 						File desktop = new File(home, "Desktop");
 						File inputFile = new File(desktop, "input.txt");
-						log.info("-------------------------------");
-						synchronousIo(inputFile);
-						log.info("-------------------------------");
-						AsyncFileIo.read(inputFile, IoDemo::doSomethingWithBytes);
+
+						Consumer<BytesPayload> consumer = (bytes) ->
+							log.info(String.format("bytes available! got %d bytes.", bytes.getLength()));
+
+						log.info("--------------------------------------------------------------");
+						Reader synchronous = new Synchronous(consumer);
+						synchronous.read(inputFile);
+
+						log.info("--------------------------------------------------------------");
+						Reader asynchronous = new Asynchronous(consumer);
+						asynchronous.read(inputFile);
 				}
 				catch (Exception e) {
 						ReflectionUtils.rethrowRuntimeException(e);
@@ -55,71 +50,81 @@ public class IoDemo {
 		}
 }
 
+@Data
+@AllArgsConstructor
+class BytesPayload {
+
+		private final byte[] bytes;
+		private final int length;
+
+		public static BytesPayload from(byte[] bytes, int len) {
+				return new BytesPayload(bytes, len);
+		}
+}
+
 @Log4j2
-class AsyncFileIo {
+class Synchronous implements Reader {
 
-		static class MyCompletionHandler implements CompletionHandler<Integer, ByteBuffer> {
+		private final Consumer<BytesPayload> consumer;
 
-				private final Consumer<byte[]> consumer;
-
-				MyCompletionHandler(Consumer<byte[]> consumer) {
-						this.consumer = consumer;
-				}
-
-				@Override
-				public void failed(Throwable exc, ByteBuffer attachment) {
-				}
-
-				@Override
-				public void completed(Integer result, ByteBuffer buffer) {
-						bytesRead = result;
-						if (bytesRead < 0)
-								return;
-
-						buffer.flip();
-
-						byte[] data = new byte[buffer.limit()];
-						buffer.get(data);
-
-						// do something with data
-						consumer.accept(data);
-						buffer.clear();
-						position = position + bytesRead;
-						fileChannel.read(buffer, position, buffer, this);
-				}
-
+		Synchronous(Consumer<BytesPayload> consumer) {
+				this.consumer = consumer;
 		}
 
-		private static int bytesRead = 0;
-		private static long position = 0;
-		private static AsynchronousFileChannel fileChannel = null;
-
-		public static void read(File file, Consumer<byte[]> consumer) {
-
-				Callable<String> x = () -> {
-
-						return null;
-				};
-
-				Path path = file.toPath();
-
-				try {
-						fileChannel = AsynchronousFileChannel.open(path, StandardOpenOption.READ);
-						ByteBuffer buffer = ByteBuffer.allocate(1024);
-
-						MyCompletionHandler myCompletionHandler = new MyCompletionHandler(consumer);
-						fileChannel.read(buffer, position, buffer, myCompletionHandler);
-						// read() returns -1 if End of File is reached.
-						while (bytesRead > 0) {
-								// Update to new read position.
-								position = position + bytesRead;
-								fileChannel.read(buffer, position, buffer, myCompletionHandler);
+		public void read(File file) throws IOException {
+				try (FileInputStream in = new FileInputStream(file)) {
+						byte[] data = new byte[FileCopyUtils.BUFFER_SIZE];
+						int res;
+						while ((res = in.read(data, 0, data.length)) != -1) {
+								this.consumer.accept(BytesPayload.from(data, res));
 						}
 				}
-				catch (IOException e) {
-						e.printStackTrace();
-				}
+		}
+}
 
+class Asynchronous implements Reader {
+
+		private final Consumer<BytesPayload> consumer;
+		private int bytesRead = 0;
+		private long position = 0;
+		private AsynchronousFileChannel fileChannel = null;
+		private final CompletionHandler<Integer, ByteBuffer> completionHandler =
+			new CompletionHandler<Integer, ByteBuffer>() {
+
+					@Override
+					public void failed(Throwable exc, ByteBuffer attachment) {
+					}
+
+					@Override
+					public void completed(Integer result, ByteBuffer buffer) {
+							Asynchronous.this.bytesRead = result;
+							if (Asynchronous.this.bytesRead < 0)
+									return;
+
+							buffer.flip();
+
+							byte[] data = new byte[buffer.limit()];
+							buffer.get(data);
+
+							Asynchronous.this.consumer.accept(BytesPayload.from(data, data.length));
+							buffer.clear();
+							Asynchronous.this.position = Asynchronous.this.position + Asynchronous.this.bytesRead;
+							Asynchronous.this.fileChannel.read(buffer, Asynchronous.this.position, buffer, this);
+					}
+			};
+
+		Asynchronous(Consumer<BytesPayload> consumer) {
+				this.consumer = consumer;
 		}
 
+		public void read(File file) throws IOException {
+				Path path = file.toPath();
+				this.fileChannel = AsynchronousFileChannel.open(path, StandardOpenOption.READ);
+				ByteBuffer buffer = ByteBuffer.allocate(FileCopyUtils.BUFFER_SIZE);
+				this.fileChannel.read(buffer, position, buffer, completionHandler);
+				while (this.bytesRead > 0) {
+						this.position = this.position + this.bytesRead;
+						this.fileChannel.read(buffer, this.position, buffer, this.completionHandler);
+				}
+		}
 }
