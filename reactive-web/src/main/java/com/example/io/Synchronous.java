@@ -13,11 +13,11 @@ class Synchronous implements Reader {
 
 		@Override
 		public void read(File file, Consumer<BytesPayload> consumer) throws IOException {
-				try (FileInputStream in = new FileInputStream(file)) {
+				try (FileInputStream in = new FileInputStream(file)) { // <1>
 						byte[] data = new byte[FileCopyUtils.BUFFER_SIZE];
 						int res;
-						while ((res = in.read(data, 0, data.length)) != -1) {
-								consumer.accept(BytesPayload.from(data, res));
+						while ((res = in.read(data, 0, data.length)) != -1) { // <2>
+								consumer.accept(BytesPayload.from(data, res)); //<3>
 						}
 				}
 		}
