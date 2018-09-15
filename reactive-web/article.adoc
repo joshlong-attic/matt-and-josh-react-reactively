@@ -42,16 +42,23 @@ include::./src/main/java/com/example/io/Asynchronous.java[]
 
 First thing's first: this code's _waaaay_ more complicated! There's a ton of things going on here and it can seem overwhelming, but indulge me, for a moment... This code  reads data from a Java NIO `Channel` and processes that data, asynchronously, on a separate thread in a callback handler. The thread on which the read was started isn't monopolized. We return virtually instantly after we call `.read(..)`, and when there is finally data available, our callback is invoked, and on a different thread. If there is latency between `.read()` calls, then we can move on and do other things with our thread. The duration of the asynchronous read, from the first byte to the last, is at best as short as the duration of the synchronous read. It's likely a tiny bit longer. But, for that complexity, we can be more efficient with our threads. We can handle more work, multiplexing I/O across a finite thread pool.
 
-I work for a cloud computing company. We'd love it if you solved your scale-out problems by buying more application instances! I say that, tongue in cheek, to highlight the ultimate benefit of reactive code: we can handle more requests, and do more work, using asynchronous I/O on the same hardware.
+I work for a cloud computing company. We'd  _love_ it if you solved your scale-out problems by buying more application instances! Of course I'm being a bit tongue-in-cheek  here. Asynchronous IO __does_ make things a bit more complicated, but hopefully this example highlights the ultimate benefit of reactive code: we can handle more requests, and do more work, using asynchronous I/O on the same hardware _if_ our work is IO bound. If it's CPU-bound  (e.g.: fibonacci, bitcoin mining, or cryptography) then reactive programming won't buy us anything.
+
+Now, most of us don't work with `Channel` _or_ `InputStream` implementations for their day-to-day work! They think about things in terms of higher order abstractions. Things like the arrays, or, more likely, the `java.util.Collection` hierarchy. A `java.util.Collection` maps very nicely to an `InputStream`: they both   assume that you'll be able to work with all the data, near instantly. You expect to be able to finish reading from most `InputStreams` sooner rather than later.  Collection types start to become a bit awkward when you move to larger sums of data; what happens when you're dealing with something potentially infinite - unbounded - like websockets, or server-sent events? What happens when there's latency between records? One record arrives now and another not for another minute or hour  such as with a chat, or when the network suffers a failure?
 
 
-// is this enough? most of us dont focus at the level of input and output. certainly not! how do i bridge the last section (IO) to the need for a computational metaphor? spend a few paragraphs explaining the need for a computtion metaphor that lends itself to the approach we choose for IO.
+We need a better way to describe these kinds of data. We're describing something asynchronous - something that will _eventually_ happen. This might seem a good fit for a `Future<T>` or a `CompletableFuture<T>`, but that only describes _one_ eventual thing. Not a whole stream of potentially unlimited things. Java hasn't really offered an appropriate metaphor by which to describe this kind of data.  Both `Iterator` and Java 8 `Stream` types can be unbounded, but they are both pull-centric; you ask for the next record instead of having the type call your code back. One assumes that if they did support push-based processing, which lets you do more with your threads, that the APIs would also expose threading and scheduling control. `Iterator` implementations say nothing about threading and Java 8 streams _all_ share the same fork-join pool.
+
+If `Iterator` and `Stream` did support push-based processing, then we'd run into another problem that really only becomes an issue in the context of IO: we'd need some way to  _push back_!  As a consumer of data being produced asynchronously, we have no idea when or how much data might be in the pipeline. We don't know if one byte will be produced in the next callback or a if terabyte will be produced! When you pull data off of an `InputStream`, you read as much data as you're prepared to handle, and no more. In the examples above we read into a `byte[]`  buffer of a fixed and known length. In an asynchronous world, we need someway to communicate to the producer how much data we're prepared to handle.
+
+Yep. We're _definitely_ missing something.
+
 
 == The Missing Metaphor
 
-There is always the risk that too many notifications will overwhelm a client. A client must be able to push back, rejecting work it can't handle. This is a fundamental aspect of flow control in distributed systems. In reactive programming, the ability of the client to signal how much work it can manage is called _backpressure_. Many projects - like Vert.x, Akka Streams, and RxJava - support reactive programming. The Spring team has a project called http://projectreactor.io[Reactor]. There's common ground across these different approaches extracted into a de-facto standard, http://www.reactive-streams.org[the Reactive Streams initiative]. The Reactive Streams initiative defines four types:
+What we want is something that maps nicely to asynchronous I/O, and that supports this push-back mechanism, or  _flow control_, in distributed systems. In reactive programming, the ability of the client to signal how much work it can manage tis called _backpressure_. There are a good deal many projects -  Vert.x, Akka Streams, and RxJava - that support reactive programming. The Spring team has a project called http://projectreactor.io[Reactor]. There's common enough ground across these different approaches extracted into a de-facto standard, http://www.reactive-streams.org[the Reactive Streams initiative]. The Reactive Streams initiative defines four types:
 
-The `Publisher<T>` is a producer of values that may eventually arrive. A `Publisher<T>` produces values of type `T`.
+The `Publisher<T>` is a producer of values that may eventually arrive. A `Publisher<T>` produces values of type `T` to a `Subscriber<T>`.
 
 .the Reactive Streams `Publisher<T>`.
 ====
@@ -66,7 +73,8 @@ public interface Publisher<T> {
 ----
 ====
 
-The `Subscriber` subscribes to a `Publisher<T>`, receiving notifications on any new values of type `T`.
+The `Subscriber` subscribes to a `Publisher<T>`, receiving notifications on any new values of type `T` through its `onNext(T)` method. If there are any errors, its `onError(Throwable)` method is called. When processing has completed normally, the subscriber's `onComplete` method is called.
+
 
 .the Reactive Streams `Subscriber<T>`.
 ====
@@ -87,7 +95,7 @@ public interface Subscriber<T> {
 ----
 ====
 
-When a `Subscriber<T>` subscribes to a `Publisher<T>`, it results in a `Subscription<T>` being given to the subscriber. The `Subscription` is arguably the most important part of the application. Think about what's happening here: you're inverting the traditional interaction with your source of data. Instead of, say, reading `byte[]` data into a buffer one scoop of data at a time, you're being given the data when it's available.
+When a `Subscriber` first connects to a `Publisher`, it is given a `Subscription` in the `Subscriber#onSubscribe` method. The `Subscription` is arguably the most important part of the whole specification: it enables backpressure. The `Subscriber` uses the `Subscription#request` method to request more data or the `Subscription#cancel` method to halt processing.
 
 .The Reactive Streams `Subscription<T>`.
 ====
@@ -104,7 +112,7 @@ public interface Subscription {
 ----
 ====
 
-A `Publisher<T>` that is also a `Subscriber<T>` is called a `Processor<T>`.
+The Reactive Streams specification provides _one_ more useful, albeit obvious, type:  A `Processor<A,B>`  is a simple interface that extends both `Subscriber<A>` and a `Publisher<B>`.
 
 .The Reactive Streams `Processor<T>`.
 ====
@@ -117,7 +125,9 @@ public interface Processor<T, R> extends Subscriber<T>, Publisher<R> {
 ----
 ====
 
-The specification is not meant to be a prescription for the implementations,   instead defining types for interoperability. The Reactive Streams types eventually found their way into Java 9 as one to one semantically equivalent interfaces in the `java.util.concurrent.Flow` class.
+
+
+The specification is not meant to be a prescription for the implementations,   instead defining types for interoperability. The Reactive Streams types are so obviously useful that they __eventually_ found their way into the recent Java 9 release as one-to-one semantically equivalent interfaces in the `java.util.concurrent.Flow` class, e.g.: `java.util.concurrent.Flow.Publisher`.
 
 
 == Reactor
