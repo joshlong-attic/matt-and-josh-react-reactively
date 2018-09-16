@@ -1,4 +1,4 @@
-package com.example.reactiveweb;
+package com.example.demo;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

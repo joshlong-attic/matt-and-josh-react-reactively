@@ -1,4 +1,4 @@
-package com.example.reactiveweb;
+package com.example.demo;
 
 import org.reactivestreams.Publisher;
 import org.springframework.context.annotation.Bean;

@@ -1,4 +1,4 @@
-package com.example.reactiveweb;
+package com.example.demo;
 
 import org.springframework.context.ApplicationEvent;
 

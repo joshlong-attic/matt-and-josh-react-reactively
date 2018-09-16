@@ -6,6 +6,7 @@ Reactive programming is an approach to writing software that embraces asynchrono
 
 Let's build a simple program that reads data from a source (a `java.io.File` reference, specifically). First up, an implementation that uses a trusty 'ol `java.io.InputStream` implementation:
 
+
 .Read data from a file _synchronously_
 ====
 [source,java,indent=0]
@@ -31,7 +32,7 @@ In that example, the bulk of the work is in the reading - there's not much else 
 ====
 [source,java,indent=0]
 ----
-include::./src/main/java/com/example/io/Asynchronous.java[]
+include::src/main/java/com/example/io/Asynchronous.java[]
 ----
 <1> this time, we adapt the `java.io.File` into a Java NIO `java.nio.file.Path`
 <2> when we create the `Channel`, we specify, among other things, a `java.util.concurrent.ExecutorService`, that will be used to invoke our `CompletionHandler` when there's data available.
@@ -146,15 +147,21 @@ Spring Framework 5.0 was released in September 2017. It builds on Reactor and th
 
 == Getting Started
 
-Let's build something! We'll begin our journey, as usual, at my second http://start.Spring.io[favorite place on the internet, the Spring Initializr - http://start.Spring.io]. The goal here is to build a new reactive web application that supports reactive data access, and then secure it (reactively!). Select the following dependencies either by using the combo box on the bottom right of the page or by selecting "Switch to the Full Version" and then choosing `Lombok`, `DevTools`, `Reactive Web`, and `Reactive MongoDB`.
+Let's build something! We'll begin our journey, as usual, at my second http://start.Spring.io[favorite place on the internet, the Spring Initializr -  start.Spring.io]. The goal here is to build a new reactive web application that supports reactive data access, and then secure it (reactively!). Select the following dependencies either by using the combo box on the bottom right of the page or by selecting "Switch to the Full Version" and then choosing `DevTools`, `Reactive Web`, `Reactive MongoDB`. and `Lombok`.
+
 
 .Selections on the Spring Initializr for a new, reactive application.
-image::./images/the-spring-initializr.png[]
+image::./images/the-spring-initializr.png[alt=the Spring Initializr,width=1000]
 
 This will give you a new project with the following layout.
 
 .The generated project structure.
-include::./includes/tree.txt[]
+====
+[source,java,indent=0]
+----
+include::includes/tree.txt[test]
+----
+====
 
 
 

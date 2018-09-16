@@ -1,4 +1,4 @@
-package com.example.reactiveweb;
+package com.example.demo;
 
 import org.springframework.http.server.PathContainer;
 import org.springframework.web.reactive.function.server.RequestPredicate;

@@ -1,1 +1,21 @@
-tree.txt
+.
+├── mvnw
+├── mvnw.cmd
+├── pom.xml
+└── src
+    ├── main
+    │   ├── java
+    │   │   └── com
+    │   │       └── example
+    │   │           └── demo
+    │   │               └── DemoApplication.java
+    │   └── resources
+    │       └── application.properties
+    └── test
+        └── java
+            └── com
+                └── example
+                    └── demo
+                        └── DemoApplicationTests.java
+
+12 directories, 6 files
