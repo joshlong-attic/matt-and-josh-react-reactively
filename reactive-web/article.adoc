@@ -146,10 +146,17 @@ Spring Framework 5.0 was released in September 2017. It builds on Reactor and th
 
 == Getting Started
 
-Let's build something! We'll begin our journey, as usual, at my second http://start.Spring.io[favorite place on the internet, the Spring Initializr - http://start.Spring.io]. The goal here is to build a new reactive web application that supports reactive data access, and then secure it (reactively!). Select the following dependencies either by using the combo box on the bottom right of the page or by selecting "Switch to the Full Version" and then choosing `Lombok`, ``
+Let's build something! We'll begin our journey, as usual, at my second http://start.Spring.io[favorite place on the internet, the Spring Initializr - http://start.Spring.io]. The goal here is to build a new reactive web application that supports reactive data access, and then secure it (reactively!). Select the following dependencies either by using the combo box on the bottom right of the page or by selecting "Switch to the Full Version" and then choosing `Lombok`, `DevTools`, `Reactive Web`, and `Reactive MongoDB`.
 
-.The Spring Initializr for our reactive application
+.Selections on the Spring Initializr for a new, reactive application.
 image::./images/the-spring-initializr.png[]
+
+This will give you a new project with the following layout.
+
+.The generated project structure.
+include::./includes/new-project.txt[]
+
+
 
 
 
