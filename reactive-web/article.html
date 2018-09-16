@@ -1390,12 +1390,77 @@ public class ProfileServiceTest {
 <p>JUnit 5 supports the same lifecycle methods and annotations (like <code>@Before</code>) as JUnit 4. This is great because it gives you a single place to set up all tests in a class, or to tear down the machinery between tests. In reactive tests, however, those  That said, I wouldn&#8217;t <em>subscribe</em> to any reactive initialization pipelines in the <code>setUp</code>  method. Instead, you might define  a <code>Flux&lt;T&gt;</code> in the setup, and then compose it in the body of the test methods. This way, you don&#8217;t have to wonder if the setup has concluded before the tests themselves execute.</p>
 </div>
 </div>
+<div class="sect2">
+<h3 id="_the_web_the_final_frontier">The Web: the Final Frontier</h3>
+<div class="paragraph">
+<p>We&#8217;ve got a data tier and a service. Let&#8217;s stand up RESTful HTTP endpoints to facilitate access to the data. Spring has long had Spring MVC, a web framework that builds upon the <code>Servlet</code> specification. Spring MVC features this concept of a controller - a class that has handler logic defined in handler methods.  In the Spring MVC architecture, requests come in to the web container, they&#8217;re routed to the right <code>Servlet</code> (in this case, the Spring MVC <code>DispatcherServlet</code>) and the <code>DispatcherServlet</code> then forwarsd the request to the right handler method in the right controller based on any of a number of things, but typically, annotations on the handler methods which themselves live in controller object instances.</p>
+</div>
+<div class="paragraph">
+<p>This approach is great if you have a lot of related endpoints that share common dependencies. You can collocate, for example, the <code>GET</code>, <code>PUT</code>, <code>POST</code>, etc., handler logic for a particular resource in one controller class so they can all use the same injected service or validation logic. This arrangement works fine. The controller approach is not new; web frameworks have been using something like it for <em>decades</em> now. The older among us will remember using Apache Struts! This approach serves us best when we want to collocate relatd handler logic; when we are creating a a fixed set of endpoints whose request mapping predicates are known a priori. It also works well if all you have are objects.</p>
+</div>
+<div class="paragraph">
+<p>Spring Framework 5 changes things, though. Spring Framework 5 assumes Java 8 and with it   lambdas and endless, functional, possibilities! A lot of what we&#8217;re doing in a reactive web application lends itself to the functional programming style. Spring Framework 5 debuts a new functional reactive programming model. Let&#8217;s look at an example and then we&#8217;ll break it down.</p>
+</div>
+<div class="exampleblock">
+<div class="title">Example 17. <code>src/main/java/com/example/demo/ProfileEndpointConfiguration.java</code></div>
+<div class="content">
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-java" data-lang="java">package com.example.demo;
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.web.reactive.function.server.RequestPredicate;
+import org.springframework.web.reactive.function.server.RouterFunction;
+import org.springframework.web.reactive.function.server.ServerResponse;
+
+import static org.springframework.web.reactive.function.server.RequestPredicates.*;
+import static org.springframework.web.reactive.function.server.RouterFunctions.route;
+
+@Configuration
+class ProfileEndpointConfiguration {
+
+		@Bean
+		RouterFunction&lt;ServerResponse&gt; routes(ProfileEndpointHandler handler) { <b class="conum">(1)</b>
+				return route(i(GET("/profiles")), handler::all) <b class="conum">(2)</b>
+					.andRoute(i(GET("/profiles/{id}")), handler::getById)
+					.andRoute(i(DELETE("/profiles/{id}")), handler::deleteById) <b class="conum">(3)</b>
+					.andRoute(i(POST("/profiles")), handler::create)
+					.andRoute(i(PUT("/profiles/{id}")), handler::updateById);
+		}
+
+		<b class="conum">(4)</b>
+		private static RequestPredicate i(RequestPredicate target) {
+				return new CaseInsensitiveRequestPredicate(target);
+		}
+}</code></pre>
+</div>
+</div>
+<div class="colist arabic">
+<ol>
+<li>
+<p>this is a Spring bean that describes routes and their handlers to the framework. The handler methods themselves are references to methods on another injected bean. They could just as easily have been inline lambdas.</p>
+</li>
+<li>
+<p>each route has a <code>RequestPredicate</code> (the object produced by <code>GET(..)</code> in this line) and a <code>HandlerFunction&lt;ServerResponse&gt;</code>.</p>
+</li>
+<li>
+<p>This route uses a path variable, <code>{id}</code>, which the framework will use to capture a parameter in the URI string.</p>
+</li>
+</ol>
+</div>
+</div>
+</div>
+<div class="paragraph">
+<p>We make judicious use of static imports in this example to make things as concise as possible.  A <code>RouterFunction&lt;ServerResponse&gt;</code> is a builder API. You can store the result of each call to <code>route</code> or <code>andRoute</code> in an intermediate variable if you like. You could loop through records in a for-loop from records in a database and contribute new endpoints dynamically, if you wanted.</p>
+</div>
+</div>
 </div>
 </div>
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2018-09-16 05:40:30 PDT
+Last updated 2018-09-16 06:05:14 PDT
 </div>
 </div>
 </body>

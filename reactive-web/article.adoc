@@ -318,7 +318,6 @@ That wasn't so bad, was it? Our service was pretty straightforward. The only nov
 
 === Testing our Reactive Service
 
-
 Reactive code presents some subtle issues when testing. Remember, our code is asynchronous. It's possibly concurrent. Each `Subscriber<T>` could execute on a different thread because the pipeline is managed by a `Scheduler`. You can change which scheduler is to be used by calling `(Flux,Mono).subscribeOn(Scheduler)`. There's a convenient factory, `Schedulers.\*`, that lets you build a new `Scheduler` from, for example, a `java.util.concurrent.Executor`. You don't normally need to override the `Scheduler`, though. By default there's one thread per core and the scheduler will just work. You only really need to worry about it when the thing to which you're subscribing could end up blocking. If, for example, you end up making a call to a blocking JDBC datastore in your `Publisher<T>`, then you should scale up interactions with that datastore with more threads using a `Scheduler`.
 
 You need to understand that the `Scheduler` is present because it implies asynchronocity. This asynchronicity and concurrency is deterministic if you use the operators in the Reactor API: things  _will_ execute as they should. It's only ever problematic, or inscrutable, when attempting to poke at the state of the reactive pipeline from outside. Then things get a bit twisted.  Reactor ships with some very convenient testing support that allow you to assert things about reactive `Publisher<T>` instances - what is going to be created and when - without having to worry about the schedulers. Let's look at some tests using the `StepVerifier` facility.
@@ -354,4 +353,29 @@ We only annotated one test because the rest are unremarkable and similiar.
 The `StepVerifier` is central to testing all things reactive. It gives us a way to assert that what we think is going to come next in the publisher is in fact going to come next in the publisher. The `StepVerifier` provides several variants on the `expect*` theme. Think of this as the reactive equivalent to `Assert*`.
 
 JUnit 5 supports the same lifecycle methods and annotations (like `@Before`) as JUnit 4. This is great because it gives you a single place to set up all tests in a class, or to tear down the machinery between tests. In reactive tests, however, those  That said, I wouldn't _subscribe_ to any reactive initialization pipelines in the `setUp`  method. Instead, you might define  a `Flux<T>` in the setup, and then compose it in the body of the test methods. This way, you don't have to wonder if the setup has concluded before the tests themselves execute.
+
+=== The Web: the Final Frontier
+
+We've got a data tier and a service. Let's stand up RESTful HTTP endpoints to facilitate access to the data. Spring has long had Spring MVC, a web framework that builds upon the `Servlet` specification. Spring MVC features this concept of a controller - a class that has handler logic defined in handler methods.  In the Spring MVC architecture, requests come in to the web container, they're routed to the right `Servlet` (in this case, the Spring MVC `DispatcherServlet`) and the `DispatcherServlet` then forwarsd the request to the right handler method in the right controller based on any of a number of things, but typically, annotations on the handler methods which themselves live in controller object instances.
+
+This approach is great if you have a lot of related endpoints that share common dependencies. You can collocate, for example, the `GET`, `PUT`, `POST`, etc., handler logic for a particular resource in one controller class so they can all use the same injected service or validation logic. This arrangement works fine. The controller approach is not new; web frameworks have been using something like it for _decades_ now. The older among us will remember using Apache Struts! This approach serves us best when we want to collocate relatd handler logic; when we are creating a a fixed set of endpoints whose request mapping predicates are known a priori. It also works well if all you have are objects.
+
+Spring Framework 5 changes things, though. Spring Framework 5 assumes Java 8 and with it   lambdas and endless, functional, possibilities! A lot of what we're doing in a reactive web application lends itself to the functional programming style. Spring Framework 5 debuts a new functional reactive programming model. Let's look at an example and then we'll break it down.
+
+
+.`src/main/java/com/example/demo/ProfileEndpointConfiguration.java`
+====
+[source,java,indent=0]
+----
+include::src/main/java/com/example/demo/ProfileEndpointConfiguration.java[]
+----
+<1> this is a Spring bean that describes routes and their handlers to the framework. The handler methods themselves are references to methods on another injected bean. They could just as easily have been inline lambdas.
+<2> each route has a `RequestPredicate` (the object produced by `GET(..)` in this line) and a `HandlerFunction<ServerResponse>`.
+<3> This route uses a path variable, `{id}`, which the framework will use to capture a parameter in the URI string.
+====
+
+We make judicious use of static imports in this example to make things as concise as possible.  A `RouterFunction<ServerResponse>` is a builder API. You can store the result of each call to `route` or `andRoute` in an intermediate variable if you like. You could loop through records in a for-loop from records in a database and contribute new endpoints dynamically, if you wanted.
+
+
+
 
