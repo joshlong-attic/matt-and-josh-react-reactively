@@ -311,7 +311,6 @@ The `ProfileCreatedEvent` is just like any other Spring `ApplicationEvent`.
 [source,java,indent=0]
 ----
 include::src/main/java/com/example/demo/ProfileCreatedEvent.java[]
-}
 ----
 ====
 
@@ -326,9 +325,11 @@ You need to understand that the `Scheduler` is present because it implies asynch
 
 In order for us to appreciate what's happening here, we need to take a moment and step back and revisit _test slices_. Test slices are a feature in Spring Boot that allow the client to laod the types in a Spring `ApplicationContext` that are adjacent to the thing under test. In this case, we're interested in testing the data access logic in the service. We are _not_ interested in testing the web functionality. We haven't even written the web functionality yet, for a start! A test slice lets us tell Spring Boot to load nothing by defdault and then we can bring pieces back in iteratively.
 
-By default, our Spring Boot application would start up with a running web server, MongoDB support, and so much more. We only need the machinery related to  MongoDB and our `ProfileService`, in isolation. We'll use the  `@DataMongoTest` to tell Spring Boot to autoconfigure all the things that could be implied in our MongoDB logic, while ignoring things like the web server and runtime. This results in focused, fasted test code that gets the benefit of being easier to reproduce.
+When Spring Boot starts up it runs a slew of auto-configuration classes. Classes that produce objects that Spring in turn manages for us. The objects are provided by default assuming certain conditions are met. These conditions can include all sorts of things, like the presence of certain types on the classpath, properties in Spring's `Environment`, and more. When a Spring Boot application starts up, it is the sum of all the auto-configurations and user configuration given to it. It will be, for our application, database connectivity, object-record mapping (ORM), a webserver, and so much more.
 
-Spring Boot goes through and runs auto-configurations when the application starts.
+We only need the machinery related to  MongoDB and our `ProfileService`, in isolation. We'll use the  `@DataMongoTest` annotation to tell Spring Boot to autoconfigure all the things that could be implied in our MongoDB logic, while ignoring things like the web server,  runtime and web components. This results in focused, faster test code that has the benefit of being easier to reproduce. The `@DataMongoTest` annotation is what's called a _test slice_ in the Spring Boot world. It supports testing a _slice_ of our application's functionality in isolation. There are numerous other test slices and you can easily create your own, too.
+
+Test slices can also contribute _new_ auto-configuration supporting tests, specifically. The `@DataMongoTest` does this. It can even run an _embedded_ MongoDB instance using the Flapdoodle library! Let's take advantage of this. Add the following to your Maven build `de.flapdoodle.embed` : `de.flapdoodle.embed.mongo` with scope `test`. There's no need to specify a version; Spring Boot will manage that for us.
 
 
 .`src/test/java/com/example/demo/ProfileServiceTest.java`
@@ -336,9 +337,21 @@ Spring Boot goes through and runs auto-configurations when the application start
 [source,java,indent=0]
 ----
 include::src/test/java/com/example/demo/ProfileServiceTest.java[]
-}
 ----
+<1> the Spring Boot test slice for MongoDB testing
+<2> we want to add, in addition to all the MongoDB functionality, our custom service for testing
+<3> This annotation tells JUnit 5 to involve the `SpringExtension` class when running this test. `SpringExtension` in turn manages instances of the class under test. We can easily inject dependencies from Sprign into our test classes. We can even inject them into the constructor! The extension is what integrates Spring with JUnit 5.
+<4> Look ma! Constructor injection in a unit test!
+<5> Make sure you're using the new `org.junit.jupiter.api.Test` annotation from JUnit 5..
+<6> In this unit test we setup state in one publisher (`saved`)..
+<7> ..and then assert things about that state in the various `expectNextMatches` calls.
+<8> Make sure to call `verifyComplete`! Otherwise, nothing'll happen.. and that makes me sad.
 ====
 
 
+We only annotated one test because the rest are unremarkable and similiar.
+
+The `StepVerifier` is central to testing all things reactive. It gives us a way to assert that what we think is going to come next in the publisher is in fact going to come next in the publisher. The `StepVerifier` provides several variants on the `expect*` theme. Think of this as the reactive equivalent to `Assert*`.
+
+JUnit 5 supports the same lifecycle methods and annotations (like `@Before`) as JUnit 4. This is great because it gives you a single place to set up all tests in a class, or to tear down the machinery between tests. In reactive tests, however, those  That said, I wouldn't _subscribe_ to any reactive initialization pipelines in the `setUp`  method. Instead, you might define  a `Flux<T>` in the setup, and then compose it in the body of the test methods. This way, you don't have to wonder if the setup has concluded before the tests themselves execute.
 

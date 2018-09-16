@@ -24,10 +24,27 @@ public class ProfileServiceTest {
 		private final ProfileService service;
 		private final ProfileRepository repository;
 
-		public ProfileServiceTest(@Autowired ProfileService service,
-					@Autowired ProfileRepository repository) {
+		public ProfileServiceTest(@Autowired ProfileService service, // <4>
+																												@Autowired ProfileRepository repository) {
 				this.service = service;
 				this.repository = repository;
+		}
+
+		@Test // <5>
+		public void getAll() {
+
+				Flux<Profile> saved = repository.saveAll(Flux.just(new Profile(null, "Josh"), new Profile(null, "Matt"), new Profile(null, "Jane")));
+
+				Flux<Profile> composite = service.all().thenMany(saved);
+
+				Predicate<Profile> match = profile -> saved.any(saveItem -> saveItem.equals(profile)).block();
+
+				StepVerifier
+					.create(composite) // <6>
+					.expectNextMatches(match)  //<7>
+					.expectNextMatches(match)
+					.expectNextMatches(match)
+					.verifyComplete(); //<8>
 		}
 
 		@Test
@@ -48,19 +65,6 @@ public class ProfileServiceTest {
 				StepVerifier
 					.create(deleted)
 					.expectNextMatches(profile -> profile.getEmail().equalsIgnoreCase(test))
-					.verifyComplete();
-		}
-
-		@Test
-		public void getAll() {
-				Flux<Profile> saved = repository.saveAll(Flux.just(new Profile(null, "Josh"), new Profile(null, "Matt"), new Profile(null, "Jane")));
-				Flux<Profile> composite = service.all().thenMany(saved);
-				Predicate<Profile> match = profile -> saved.any(saveItem -> saveItem.equals(profile)).block();
-				StepVerifier
-					.create(composite)
-					.expectNextMatches(match)
-					.expectNextMatches(match)
-					.expectNextMatches(match)
 					.verifyComplete();
 		}
 
