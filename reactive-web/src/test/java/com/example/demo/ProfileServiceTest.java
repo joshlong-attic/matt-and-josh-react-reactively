@@ -15,20 +15,20 @@ import reactor.test.StepVerifier;
 import java.util.UUID;
 import java.util.function.Predicate;
 
-/**
-	* @author <a href="mailto:josh@joshlong.com">Josh Long</a>
-	*/
 @Log4j2
-@DataMongoTest
-@Import(ProfileService.class)
-@ExtendWith(SpringExtension.class)
+@DataMongoTest // <1>
+@Import(ProfileService.class) // <2>
+@ExtendWith(SpringExtension.class)  //<3>
 public class ProfileServiceTest {
 
-		@Autowired
-		private ProfileService service;
+		private final ProfileService service;
+		private final ProfileRepository repository;
 
-		@Autowired
-		private ProfileRepository repository;
+		public ProfileServiceTest(@Autowired ProfileService service,
+					@Autowired ProfileRepository repository) {
+				this.service = service;
+				this.repository = repository;
+		}
 
 		@Test
 		public void save() {

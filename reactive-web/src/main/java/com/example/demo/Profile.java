@@ -6,17 +6,15 @@ import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 
-/**
-	* @author <a href="mailto:josh@joshlong.com">Josh Long</a>
-	*/
-@Document
-@Data
+@Document 	// <1>
+@Data // <2>
 @AllArgsConstructor
 @NoArgsConstructor
 class Profile {
 
-		@Id
+		@Id // <3>
 		private String id;
 
+		// <4>
 		private String email;
 }
