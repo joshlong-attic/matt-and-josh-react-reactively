@@ -154,7 +154,7 @@ image::./images/the-spring-initializr.png[]
 This will give you a new project with the following layout.
 
 .The generated project structure.
-include::./includes/new-project.txt[]
+include::./includes/tree.txt[]
 
 
 
