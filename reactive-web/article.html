@@ -1393,16 +1393,110 @@ public class ProfileServiceTest {
 <div class="sect2">
 <h3 id="_the_web_the_final_frontier">The Web: the Final Frontier</h3>
 <div class="paragraph">
-<p>We&#8217;ve got a data tier and a service. Let&#8217;s stand up RESTful HTTP endpoints to facilitate access to the data. Spring has long had Spring MVC, a web framework that builds upon the <code>Servlet</code> specification. Spring MVC features this concept of a controller - a class that has handler logic defined in handler methods.  In the Spring MVC architecture, requests come in to the web container, they&#8217;re routed to the right <code>Servlet</code> (in this case, the Spring MVC <code>DispatcherServlet</code>) and the <code>DispatcherServlet</code> then forwarsd the request to the right handler method in the right controller based on any of a number of things, but typically, annotations on the handler methods which themselves live in controller object instances.</p>
+<p>We&#8217;ve got a data tier and a service. Let&#8217;s stand up RESTful HTTP endpoints to facilitate access to the data. Spring has long had Spring MVC, a web framework that builds upon the  Servlet specification. Spring MVC  has this concept of a controller - a class that has   logic defined in handler methods that process incoming requests and then stage a response - usually a view or a representation of some server-side resource. In the Spring MVC architecture, requests come in to the web container, they&#8217;re routed to the right <code>Servlet</code> (in this case, the Spring MVC <code>DispatcherServlet</code>) and the <code>DispatcherServlet</code> then forwards the request to the right handler method in the right controller based on any of a number of things -  typically annotations on the handler methods which themselves live on controller object instances.</p>
 </div>
 <div class="paragraph">
-<p>This approach is great if you have a lot of related endpoints that share common dependencies. You can collocate, for example, the <code>GET</code>, <code>PUT</code>, <code>POST</code>, etc., handler logic for a particular resource in one controller class so they can all use the same injected service or validation logic. This arrangement works fine. The controller approach is not new; web frameworks have been using something like it for <em>decades</em> now. The older among us will remember using Apache Struts! This approach serves us best when we want to collocate relatd handler logic; when we are creating a a fixed set of endpoints whose request mapping predicates are known a priori. It also works well if all you have are objects.</p>
-</div>
-<div class="paragraph">
-<p>Spring Framework 5 changes things, though. Spring Framework 5 assumes Java 8 and with it   lambdas and endless, functional, possibilities! A lot of what we&#8217;re doing in a reactive web application lends itself to the functional programming style. Spring Framework 5 debuts a new functional reactive programming model. Let&#8217;s look at an example and then we&#8217;ll break it down.</p>
+<p>Let&#8217;s look at a classic Spring MVC style controller that supports manipulating our <code>Profile</code> entities.</p>
 </div>
 <div class="exampleblock">
-<div class="title">Example 17. <code>src/main/java/com/example/demo/ProfileEndpointConfiguration.java</code></div>
+<div class="title">Example 17. <code>src/main/java/com/example/demo/GreetingsRestController.java</code></div>
+<div class="content">
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-java" data-lang="java">package com.example.demo;
+
+import org.reactivestreams.Publisher;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+import reactor.core.publisher.Mono;
+
+import java.net.URI;
+
+@RestController <b class="conum">(1)</b>
+@RequestMapping(value = "/profiles", produces = MediaType.APPLICATION_JSON_VALUE)  <b class="conum">(2)</b>
+@org.springframework.context.annotation.Profile("classic")
+class ProfileRestController {
+
+		private final MediaType mediaType = MediaType.APPLICATION_JSON_UTF8;
+		private final ProfileService profileRepository;
+
+		ProfileRestController(ProfileService profileRepository) {
+				this.profileRepository = profileRepository;
+		}
+
+		<b class="conum">(3)</b>
+		@GetMapping
+		Publisher&lt;Profile&gt; getAll() {
+				return this.profileRepository.all();
+		}
+
+		<b class="conum">(4)</b>
+		@GetMapping("/{id}")
+		Publisher&lt;Profile&gt; getById(@PathVariable("id") String id) {
+				return this.profileRepository.get(id);
+		}
+
+		<b class="conum">(5)</b>
+		@PostMapping
+		Publisher&lt;ResponseEntity&lt;Profile&gt;&gt; create(@RequestBody Profile profile) {
+				return this.profileRepository
+					.create(profile.getEmail())
+					.map(p -&gt; ResponseEntity.created(URI.create("/profiles/" + p.getId()))
+						.contentType(mediaType)
+						.build());
+		}
+
+		@DeleteMapping("/{id}")
+		Publisher&lt;Profile&gt; deleteById(@PathVariable String id) {
+				return this.profileRepository.delete(id);
+		}
+
+		@PutMapping("/{id}")
+		Publisher&lt;ResponseEntity&lt;Profile&gt;&gt; updateById(@PathVariable String id, @RequestBody Profile profile) {
+				return Mono
+					.just(profile)
+					.flatMap(p -&gt; this.profileRepository.update(id, p.getEmail()))
+					.map(p -&gt; ResponseEntity
+						.ok()
+						.contentType(this.mediaType)
+						.build());
+		}
+}</code></pre>
+</div>
+</div>
+<div class="colist arabic">
+<ol>
+<li>
+<p>this is yet another stereotype annotation that tells Spring WebFlux that this class provides HTTP handler methods</p>
+</li>
+<li>
+<p>there are some attributes that are common to all the HTTP endpoints, like the root URI, and the default <code>content-type</code> of all responses produced. You can use <code>@RequestMapping</code> to spell this out at the class level and the configuration is inherited for each subordinate handler method</p>
+</li>
+<li>
+<p>there are specializations of <code>@RequestMapping</code>, one for each HTTP verb, that you can use. This annotation says, "this endpoint is identical to that specified in the root <code>@RequestMapping</code> except that it is limited to HTTP <code>GET</code> endpoints"</p>
+</li>
+<li>
+<p>this endpoint uses a <em>path variable</em> - a part of the URI that is matched against the incoming request and used to extract a parameter. In this case, it extracts the <code>id</code> parameter and makes it available as a method parameter in the handler method.</p>
+</li>
+<li>
+<p>this method supports creating a new <code>Profile</code> with an HTTP <code>POST</code> action. In this handler method we expect incoming requests to have a JSON body that the framework then marhsals into a Java object, <code>Profile</code>.  This happens automtically based on the content-type of the incoming request and the configured, acceptable, convertable payloads supported by Spring WebFlux</p>
+</li>
+</ol>
+</div>
+</div>
+</div>
+<div class="paragraph">
+<p>This approach is great if you have a lot of related endpoints that share common dependencies. You can collocate, for example, the <code>GET</code>, <code>PUT</code>, <code>POST</code>, etc., handler logic for a particular resource in one controller class so they can all use the same injected service or validation logic.  The controller approach is not new; Java web frameworks have been using something like it for <em>decades</em> now. The older among us will remember using Apache Struts in the dawn of the 00&#8217;s. This approach works well if you have a finite set of HTTP endopoints whose configuration is known a priori. It works well if you want to collocate related endpoints. It also works well if the request matching logic can be described declaratively using Spring&#8217;s various annotations.</p>
+</div>
+<div class="paragraph">
+<p>This approach is also likely to be a perennial favorite for those coming from Spring MVC, as its familiar. Those annotations are exactly the same annotations from Spring MVC. But, this is <em>not</em> Spring MVC. And this isn&#8217;t, at least by default, the Servlet API. It&#8217;s a brand new web runtime, Spring WebFlux, running - in this instance  -  on Netty.</p>
+</div>
+<div class="paragraph">
+<p>Spring Framework 5 changes things, though. Spring Framework 5 assumes a Java 8 baseline and with it   lambdas and endless, functional, possibilities! A lot of what we&#8217;re doing in a reactive web application lends itself to the functional programming style. Spring Framework 5 debuts a new functional reactive programming model that mirrors the controller-style programming model in Spring WebFlux. This new programming model is available exclusively in Spring WebFlux. Let&#8217;s look at an example.</p>
+</div>
+<div class="exampleblock">
+<div class="title">Example 18. <code>src/main/java/com/example/demo/ProfileEndpointConfiguration.java</code></div>
 <div class="content">
 <div class="listingblock">
 <div class="content">
@@ -1421,7 +1515,7 @@ import static org.springframework.web.reactive.function.server.RouterFunctions.r
 class ProfileEndpointConfiguration {
 
 		@Bean
-		RouterFunction&lt;ServerResponse&gt; routes(ProfileEndpointHandler handler) { <b class="conum">(1)</b>
+		RouterFunction&lt;ServerResponse&gt; routes(ProfileHandler handler) { <b class="conum">(1)</b>
 				return route(i(GET("/profiles")), handler::all) <b class="conum">(2)</b>
 					.andRoute(i(GET("/profiles/{id}")), handler::getById)
 					.andRoute(i(DELETE("/profiles/{id}")), handler::deleteById) <b class="conum">(3)</b>
@@ -1439,7 +1533,7 @@ class ProfileEndpointConfiguration {
 <div class="colist arabic">
 <ol>
 <li>
-<p>this is a Spring bean that describes routes and their handlers to the framework. The handler methods themselves are references to methods on another injected bean. They could just as easily have been inline lambdas.</p>
+<p>this is a Spring bean that describes routes and their handlers to the framework. The handler methods themselves are Java 8 references to methods on another injected bean. They could just as easily have been inline lambdas.</p>
 </li>
 <li>
 <p>each route has a <code>RequestPredicate</code> (the object produced by <code>GET(..)</code> in this line) and a <code>HandlerFunction&lt;ServerResponse&gt;</code>.</p>
@@ -1452,7 +1546,178 @@ class ProfileEndpointConfiguration {
 </div>
 </div>
 <div class="paragraph">
-<p>We make judicious use of static imports in this example to make things as concise as possible.  A <code>RouterFunction&lt;ServerResponse&gt;</code> is a builder API. You can store the result of each call to <code>route</code> or <code>andRoute</code> in an intermediate variable if you like. You could loop through records in a for-loop from records in a database and contribute new endpoints dynamically, if you wanted.</p>
+<p>We make judicious use of static imports in this example to make things as concise as possible. <code>RouterFunction&lt;ServerResponse&gt;</code> is a builder API. You can store the result of each call to <code>route</code> or <code>andRoute</code> in an intermediate variable if you like. You could loop through records in a for-loop from records in a database and contribute new endpoints dynamically, if you wanted.</p>
+</div>
+<div class="paragraph">
+<p>Spring WebFlux provides a DSL for describing how to match incoming requests.  <code>GET("/profiles")</code> results in a <code>RequestPredicate</code> that matches incoming HTTP <code>GET</code>-method requests that are routed to the URI <code>/profiles</code>. You can compose <code>RequestPredicate</code> instances using <code>.and(RequestPredicate)</code>, <code>.not(RequestPredicate)</code>, or <code>.or(RequestPredicate)</code>. In this example, I also provide a fairly trivial adapter -  <code>CaseInsensitiveRequestPredicate</code> - that lower-cases all incoming URLs and matches it against the configured (and lower-cased) URI in the <code>RequestPredicate</code>. The result is that if you type <code><a href="http://localhost:8080/profiles" class="bare">http://localhost:8080/profiles</a></code> or <code><a href="http://localhost:8080/PROfiLEs" class="bare">http://localhost:8080/PROfiLEs</a></code> they&#8217;ll both work.</p>
+</div>
+<div class="exampleblock">
+<div class="title">Example 19. <code>src/main/java/com/example/demo/CaseInsensitiveRequestPredicate.java</code></div>
+<div class="content">
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-java" data-lang="java">package com.example.demo;
+
+import org.springframework.http.server.PathContainer;
+import org.springframework.web.reactive.function.server.RequestPredicate;
+import org.springframework.web.reactive.function.server.ServerRequest;
+import org.springframework.web.reactive.function.server.support.ServerRequestWrapper;
+
+import java.net.URI;
+
+public class CaseInsensitiveRequestPredicate implements RequestPredicate {
+
+		private final RequestPredicate target;
+
+		CaseInsensitiveRequestPredicate(RequestPredicate target) {
+				this.target = target;
+		}
+
+		@Override
+		public boolean test(ServerRequest request) { <b class="conum">(1)</b>
+				return this.target.test(new LowerCaseUriServerRequestWrapper(request));
+		}
+
+		@Override
+		public String toString() {
+				return this.target.toString();
+		}
+}
+
+<b class="conum">(2)</b>
+class LowerCaseUriServerRequestWrapper extends ServerRequestWrapper {
+
+		LowerCaseUriServerRequestWrapper(ServerRequest delegate) {
+				super(delegate);
+		}
+
+		@Override
+		public URI uri() {
+				return URI.create(super.uri().toString().toLowerCase());
+		}
+
+		@Override
+		public String path() {
+				return uri().getRawPath();
+		}
+
+		@Override
+		public PathContainer pathContainer() {
+				return PathContainer.parsePath(path());
+		}
+}</code></pre>
+</div>
+</div>
+<div class="colist arabic">
+<ol>
+<li>
+<p>The meat of a  <code>RequestPredicate</code> implementation is in the <code>test(ServerRequest)</code> method.</p>
+</li>
+<li>
+<p>My implementation wraps the incoming <code>ServerRequest</code>, a common enough task that Spring WebFlux even provides a <code>ServerRequestWrapper</code></p>
+</li>
+</ol>
+</div>
+</div>
+</div>
+<div class="paragraph">
+<p>Once a request is matched, the <code>HandlerFunction&lt;ServerResponse&gt;</code> is invoked to produce a response. Let&#8217;s look at our handler object.</p>
+</div>
+<div class="exampleblock">
+<div class="title">Example 20. <code>src/main/java/com/example/demo/ProfileHandler.java</code></div>
+<div class="content">
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-java" data-lang="java">package com.example.demo;
+
+import org.reactivestreams.Publisher;
+import org.springframework.http.MediaType;
+import org.springframework.stereotype.Component;
+import org.springframework.web.reactive.function.server.ServerRequest;
+import org.springframework.web.reactive.function.server.ServerResponse;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+
+import java.net.URI;
+
+@Component
+class ProfileHandler {
+
+		<b class="conum">(1)</b>
+		private final ProfileService profileService;
+
+		ProfileHandler(ProfileService profileService) {
+				this.profileService = profileService;
+		}
+
+		<b class="conum">(2)</b>
+		Mono&lt;ServerResponse&gt; getById(ServerRequest r) {
+				return defaultReadResponse(this.profileService.get(id(r)));
+		}
+
+		Mono&lt;ServerResponse&gt; all(ServerRequest r) {
+				return defaultReadResponse(this.profileService.all());
+		}
+
+		Mono&lt;ServerResponse&gt; deleteById(ServerRequest r) {
+				return defaultReadResponse(this.profileService.delete(id(r)));
+		}
+
+		Mono&lt;ServerResponse&gt; updateById(ServerRequest r) {
+				Flux&lt;Profile&gt; id = r.bodyToFlux(Profile.class)
+					.flatMap(p -&gt; this.profileService.update(id(r), p.getEmail()));
+				return defaultReadResponse(id);
+		}
+
+		Mono&lt;ServerResponse&gt; create(ServerRequest request) {
+				Flux&lt;Profile&gt; flux = request
+					.bodyToFlux(Profile.class)
+					.flatMap(toWrite -&gt; this.profileService.create(toWrite.getEmail()));
+				return defaultWriteResponse(flux);
+		}
+
+		<b class="conum">(3)</b>
+		private static Mono&lt;ServerResponse&gt; defaultWriteResponse(Publisher&lt;Profile&gt; profiles) {
+				return Mono
+					.from(profiles)
+					.flatMap(p -&gt; ServerResponse
+						.created(URI.create("/profiles/" + p.getId()))
+						.contentType(MediaType.APPLICATION_JSON_UTF8)
+						.build()
+					);
+		}
+
+		<b class="conum">(4)</b>
+		private static Mono&lt;ServerResponse&gt; defaultReadResponse(Publisher&lt;Profile&gt; profiles) {
+				return ServerResponse
+					.ok()
+					.contentType(MediaType.APPLICATION_JSON_UTF8)
+					.body(profiles, Profile.class);
+		}
+
+		private static String id(ServerRequest r) {
+				return r.pathVariable("id");
+		}
+}</code></pre>
+</div>
+</div>
+<div class="colist arabic">
+<ol>
+<li>
+<p>as before, we&#8217;re going to make use of our <code>ProfileService</code> to do our work</p>
+</li>
+<li>
+<p>each handler method has an identical signature: <code>SeverRequest</code> is the request parameter and <code>Mono&lt;ServerResponse&gt;</code> is the return value.</p>
+</li>
+<li>
+<p>we can centralize common logic in, yep! - you guessed it! - functions. This function creates a <code>Mono&lt;ServerResponse&gt;</code> from a <code>Publisher&lt;Profile&gt;</code> for any incoming request. Each request uses the <code>ServerResponse</code> builder object to create a response that has a <code>Location</code> header, a <code>Content-Type</code> header, and no payload. (You don&#8217;t need to send a payload in the response for <code>PUT</code> or <code>POST</code>, for example).</p>
+</li>
+<li>
+<p>this method centralizes all configuration for replies to read requests (for instance, those coming from <code>GET</code>)</p>
+</li>
+</ol>
+</div>
+</div>
 </div>
 </div>
 </div>
@@ -1460,7 +1725,7 @@ class ProfileEndpointConfiguration {
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2018-09-16 06:05:14 PDT
+Last updated 2018-09-16 19:26:35 PDT
 </div>
 </div>
 </body>

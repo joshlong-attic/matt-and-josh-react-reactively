@@ -10,18 +10,17 @@ import reactor.core.publisher.Mono;
 
 import java.net.URI;
 
-/**
-	* @author <a href="mailto:josh@joshlong.com">Josh Long</a>
-	*/
 @Component
-class ProfileEndpointHandler {
+class ProfileHandler {
 
+		// <1>
 		private final ProfileService profileService;
 
-		ProfileEndpointHandler(ProfileService profileService) {
+		ProfileHandler(ProfileService profileService) {
 				this.profileService = profileService;
 		}
 
+		// <2>
 		Mono<ServerResponse> getById(ServerRequest r) {
 				return defaultReadResponse(this.profileService.get(id(r)));
 		}
@@ -47,6 +46,7 @@ class ProfileEndpointHandler {
 				return defaultWriteResponse(flux);
 		}
 
+		// <3>
 		private static Mono<ServerResponse> defaultWriteResponse(Publisher<Profile> profiles) {
 				return Mono
 					.from(profiles)
@@ -57,6 +57,7 @@ class ProfileEndpointHandler {
 					);
 		}
 
+		// <4>
 		private static Mono<ServerResponse> defaultReadResponse(Publisher<Profile> profiles) {
 				return ServerResponse
 					.ok()

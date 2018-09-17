@@ -356,11 +356,29 @@ JUnit 5 supports the same lifecycle methods and annotations (like `@Before`) as 
 
 === The Web: the Final Frontier
 
-We've got a data tier and a service. Let's stand up RESTful HTTP endpoints to facilitate access to the data. Spring has long had Spring MVC, a web framework that builds upon the `Servlet` specification. Spring MVC features this concept of a controller - a class that has handler logic defined in handler methods.  In the Spring MVC architecture, requests come in to the web container, they're routed to the right `Servlet` (in this case, the Spring MVC `DispatcherServlet`) and the `DispatcherServlet` then forwarsd the request to the right handler method in the right controller based on any of a number of things, but typically, annotations on the handler methods which themselves live in controller object instances.
+We've got a data tier and a service. Let's stand up RESTful HTTP endpoints to facilitate access to the data. Spring has long had Spring MVC, a web framework that builds upon the  Servlet specification. Spring MVC  has this concept of a controller - a class that has   logic defined in handler methods that process incoming requests and then stage a response - usually a view or a representation of some server-side resource. In the Spring MVC architecture, requests come in to the web container, they're routed to the right `Servlet` (in this case, the Spring MVC `DispatcherServlet`) and the `DispatcherServlet` then forwards the request to the right handler method in the right controller based on any of a number of things -  typically annotations on the handler methods which themselves live on controller object instances.
 
-This approach is great if you have a lot of related endpoints that share common dependencies. You can collocate, for example, the `GET`, `PUT`, `POST`, etc., handler logic for a particular resource in one controller class so they can all use the same injected service or validation logic. This arrangement works fine. The controller approach is not new; web frameworks have been using something like it for _decades_ now. The older among us will remember using Apache Struts! This approach serves us best when we want to collocate relatd handler logic; when we are creating a a fixed set of endpoints whose request mapping predicates are known a priori. It also works well if all you have are objects.
+Let's look at a classic Spring MVC style controller that supports manipulating our `Profile` entities.
 
-Spring Framework 5 changes things, though. Spring Framework 5 assumes Java 8 and with it   lambdas and endless, functional, possibilities! A lot of what we're doing in a reactive web application lends itself to the functional programming style. Spring Framework 5 debuts a new functional reactive programming model. Let's look at an example and then we'll break it down.
+.`src/main/java/com/example/demo/GreetingsRestController.java`
+====
+[source,java,indent=0]
+----
+include::src/main/java/com/example/demo/ProfileRestController.java[]
+----
+<1> this is yet another stereotype annotation that tells Spring WebFlux that this class provides HTTP handler methods
+<2> there are some attributes that are common to all the HTTP endpoints, like the root URI, and the default `content-type` of all responses produced. You can use `@RequestMapping` to spell this out at the class level and the configuration is inherited for each subordinate handler method
+<3> there are specializations of `@RequestMapping`, one for each HTTP verb, that you can use. This annotation says, "this endpoint is identical to that specified in the root `@RequestMapping` except that it is limited to HTTP `GET` endpoints"
+<4> this endpoint uses a _path variable_ - a part of the URI that is matched against the incoming request and used to extract a parameter. In this case, it extracts the `id` parameter and makes it available as a method parameter in the handler method.
+<5> this method supports creating a new `Profile` with an HTTP `POST` action. In this handler method we expect incoming requests to have a JSON body that the framework then marhsals into a Java object, `Profile`.  This happens automtically based on the content-type of the incoming request and the configured, acceptable, convertable payloads supported by Spring WebFlux
+====
+
+
+This approach is great if you have a lot of related endpoints that share common dependencies. You can collocate, for example, the `GET`, `PUT`, `POST`, etc., handler logic for a particular resource in one controller class so they can all use the same injected service or validation logic.  The controller approach is not new; Java web frameworks have been using something like it for _decades_ now. The older among us will remember using Apache Struts in the dawn of the 00's. This approach works well if you have a finite set of HTTP endopoints whose configuration is known a priori. It works well if you want to collocate related endpoints. It also works well if the request matching logic can be described declaratively using Spring's various annotations.
+
+This approach is also likely to be a perennial favorite for those coming from Spring MVC, as its familiar. Those annotations are exactly the same annotations from Spring MVC. But, this is _not_ Spring MVC. And this isn't, at least by default, the Servlet API. It's a brand new web runtime, Spring WebFlux, running - in this instance  -  on Netty.
+
+Spring Framework 5 changes things, though. Spring Framework 5 assumes a Java 8 baseline and with it   lambdas and endless, functional, possibilities! A lot of what we're doing in a reactive web application lends itself to the functional programming style. Spring Framework 5 debuts a new functional reactive programming model that mirrors the controller-style programming model in Spring WebFlux. This new programming model is available exclusively in Spring WebFlux. Let's look at an example.
 
 
 .`src/main/java/com/example/demo/ProfileEndpointConfiguration.java`
@@ -369,13 +387,40 @@ Spring Framework 5 changes things, though. Spring Framework 5 assumes Java 8 and
 ----
 include::src/main/java/com/example/demo/ProfileEndpointConfiguration.java[]
 ----
-<1> this is a Spring bean that describes routes and their handlers to the framework. The handler methods themselves are references to methods on another injected bean. They could just as easily have been inline lambdas.
+<1> this is a Spring bean that describes routes and their handlers to the framework. The handler methods themselves are Java 8 references to methods on another injected bean. They could just as easily have been inline lambdas.
 <2> each route has a `RequestPredicate` (the object produced by `GET(..)` in this line) and a `HandlerFunction<ServerResponse>`.
 <3> This route uses a path variable, `{id}`, which the framework will use to capture a parameter in the URI string.
 ====
 
-We make judicious use of static imports in this example to make things as concise as possible.  A `RouterFunction<ServerResponse>` is a builder API. You can store the result of each call to `route` or `andRoute` in an intermediate variable if you like. You could loop through records in a for-loop from records in a database and contribute new endpoints dynamically, if you wanted.
+We make judicious use of static imports in this example to make things as concise as possible. `RouterFunction<ServerResponse>` is a builder API. You can store the result of each call to `route` or `andRoute` in an intermediate variable if you like. You could loop through records in a for-loop from records in a database and contribute new endpoints dynamically, if you wanted.
+
+Spring WebFlux provides a DSL for describing how to match incoming requests.  `GET("/profiles")` results in a `RequestPredicate` that matches incoming HTTP `GET`-method requests that are routed to the URI `/profiles`. You can compose `RequestPredicate` instances using `.and(RequestPredicate)`, `.not(RequestPredicate)`, or `.or(RequestPredicate)`. In this example, I also provide a fairly trivial adapter -  `CaseInsensitiveRequestPredicate` - that lower-cases all incoming URLs and matches it against the configured (and lower-cased) URI in the `RequestPredicate`. The result is that if you type `http://localhost:8080/profiles` or `http://localhost:8080/PROfiLEs` they'll both work.
 
 
 
 
+.`src/main/java/com/example/demo/CaseInsensitiveRequestPredicate.java`
+====
+[source,java,indent=0]
+----
+include::src/main/java/com/example/demo/CaseInsensitiveRequestPredicate.java[]
+----
+<1> The meat of a  `RequestPredicate` implementation is in the `test(ServerRequest)` method.
+<2> My implementation wraps the incoming `ServerRequest`, a common enough task that Spring WebFlux even provides a `ServerRequestWrapper`
+====
+
+
+Once a request is matched, the `HandlerFunction<ServerResponse>` is invoked to produce a response. Let's look at our handler object.
+
+
+.`src/main/java/com/example/demo/ProfileHandler.java`
+====
+[source,java,indent=0]
+----
+include::src/main/java/com/example/demo/ProfileHandler.java[]
+----
+<1> as before, we're going to make use of our `ProfileService` to do our work
+<2> each handler method has an identical signature: `SeverRequest` is the request parameter and `Mono<ServerResponse>` is the return value.
+<3> we can centralize common logic in, yep! - you guessed it! - functions. This function creates a `Mono<ServerResponse>` from a `Publisher<Profile>` for any incoming request. Each request uses the `ServerResponse` builder object to create a response that has a `Location` header, a `Content-Type` header, and no payload. (You don't need to send a payload in the response for `PUT` or `POST`, for example).
+<4> this method centralizes all configuration for replies to read requests (for instance, those coming from `GET`)
+====

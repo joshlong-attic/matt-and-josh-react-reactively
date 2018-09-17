@@ -7,28 +7,26 @@ import org.springframework.web.reactive.function.server.support.ServerRequestWra
 
 import java.net.URI;
 
-/**
-	* Declare your routes using lowercase and this will normalize incoming requests to be lower case.
-	*/
 public class CaseInsensitiveRequestPredicate implements RequestPredicate {
 
 		private final RequestPredicate target;
-
-		@Override
-		public String toString() {
-				return this.target.toString();
-		}
 
 		CaseInsensitiveRequestPredicate(RequestPredicate target) {
 				this.target = target;
 		}
 
 		@Override
-		public boolean test(ServerRequest request) {
+		public boolean test(ServerRequest request) { //<1>
 				return this.target.test(new LowerCaseUriServerRequestWrapper(request));
+		}
+
+		@Override
+		public String toString() {
+				return this.target.toString();
 		}
 }
 
+// <2>
 class LowerCaseUriServerRequestWrapper extends ServerRequestWrapper {
 
 		LowerCaseUriServerRequestWrapper(ServerRequest delegate) {
