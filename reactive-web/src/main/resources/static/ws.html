@@ -2,23 +2,19 @@
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <title>a simple websocket client</title>
+    <title>Profile notification client
+    </title>
 </head>
 <body>
 <script lang="text/javascript">
 
-    // window.addEventListener('load', function (e) {
+    // <1>
+    var socket = new WebSocket('ws://localhost:8080/ws/profiles');
 
-    const socket = new WebSocket('ws://localhost:8080/ws/profiles');
-
-    socket.addEventListener('open', function (event) {
-        socket.send(JSON.stringify({'command': 'ping'}))
-    });
+    // <2>
     socket.addEventListener('message', function (event) {
-        console.log('message from server: ', event.data)
+      window.alert('message from server: ' + event.data);
     });
-
-    // });
 
 </script>
 </body>

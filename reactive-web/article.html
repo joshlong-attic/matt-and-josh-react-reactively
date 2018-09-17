@@ -2082,7 +2082,7 @@ class WebSocketConfiguration {
 </div>
 </div>
 <div class="paragraph">
-<p>All that was fairly straightforward, one hopes. Let&#8217;s look at the most important bit - the <code>ProfileCreatedEventPublisher</code>. This code was harder for me to write than it is for you to read. This component needs to act as a bridge; it needs to consume <code>ProfileCreatedEvent</code> events and then put them in an in-memory <code>BlockingQueue&lt;ProfileCreatedEvent&gt;</code> which our <code>Publisher&lt;WebSocketMessage&gt;</code> will drain in another thread.  There&#8217;s really not that much to it; what you need to understand is the <code>java.util.concurrent.BlockingQueue&lt;T&gt;</code> collection, more than anything. A <code>BlockingQueue&lt;T&gt;</code> is an interesting beast. If a consumer tries to drain an item from the queue, but the queue is empty, the queue will block until such time as a new item has been offered to the queue. This means we can simple loop forever, waiting for the next item to be added to the queue, and when it&#8217;s available our code will return and we can publish the event on the <code>FluxSink&lt;ProfileCreatedEvent&gt; sink</code> pointer we&#8217;ve been given when the <code>Flux</code> is first created. The <code>Consumer&lt;T&gt;.accept(FluxSink&lt;ProfileCreatedEvent&gt; sink)</code> method, in this case, is only called once when the application starts up and we try to create the <code>Flux</code> for the first time. In that callback we begin the while loop that will constantly try to drain the <code>BlockingQueue&lt;T&gt;</code>. This infinite, and un-ending while-loop <em>blocks</em>! Naturally. That&#8217;s the whole point. So, we manage that ourselves using the previously configured <code>java.util.concurrent.Executor</code> instance.</p>
+<p>All that was fairly straightforward, one hopes. Let&#8217;s look at the most important bit - the <code>ProfileCreatedEventPublisher</code>. This code was harder for me to write than it is for you to read. This component needs to act as a bridge; it needs to consume <code>ProfileCreatedEvent</code> events and then put them in an in-memory <code>BlockingQueue&lt;ProfileCreatedEvent&gt;</code> which our <code>Publisher&lt;WebSocketMessage&gt;</code> will drain in another thread.  There&#8217;s really not that much to it; what you need to understand is the <code>java.util.concurrent.BlockingQueue&lt;T&gt;</code> collection, more than anything. A <code>BlockingQueue&lt;T&gt;</code> is an interesting beast. If a consumer tries to drain an item from the queue, but the queue is empty, the queue will block until such time as a new item has been offered to the queue. This means we can simply loop forever, waiting for the next item to be added to the queue, and when it&#8217;s available our code will return and we can publish the event on the <code>FluxSink&lt;ProfileCreatedEvent&gt; sink</code> pointer we&#8217;ve been given when the <code>Flux</code> is first created. The <code>Consumer&lt;T&gt;.accept(FluxSink&lt;ProfileCreatedEvent&gt; sink)</code> method, in this case, is only called once when the application starts up and we try to create the <code>Flux</code> for the first time. In that callback we begin the while loop that will constantly try to drain the <code>BlockingQueue&lt;T&gt;</code>. This infinite, and un-ending while-loop <em>blocks</em>! Naturally. That&#8217;s the whole point. So, we manage that ourselves using the previously configured <code>java.util.concurrent.Executor</code> instance.</p>
 </div>
 <div class="exampleblock">
 <div class="title">Example 23. <code>src/main/java/com/example/demo/ProfileCreatedEventPublisher.java</code></div>
@@ -2142,7 +2142,7 @@ class ProfileCreatedEventPublisher implements
 <p>The <code>ApplicationListener&lt;ApplicationEvent&gt;</code> interface is a Spring Framework construction. It tells the framework that we want to be notified, via the  <code>onApplicationEvent(ProfileCreatedEvent)</code> method, of any new events published when a new <code>Profile</code> is created.</p>
 </li>
 <li>
-<p>The <code>Consumer&lt;FluxSink&lt;ProfileCreatedEvent&gt;&gt;</code> construction is used when we create the <code>Flux&lt;T&gt;</code> with <code>Flux.create</code>. This bean is a Java 8 <code>Consumer&lt;T&gt;</code> that <em>accepts</em> an instance of a <code>FluxSink&lt;T&gt;</code>. A <code>FluxSink&lt;T&gt;</code> is a thing into which we can publish new items, however we may arrive at them. If you want to integrate the reactive world with non-reactive code in the outside world, use this construction. I can capture that reference and use it in another thread. For example, I could use it to capture events from Spring Integration, or from some messaging technology, or from <em>anything</em> else, in any other thread. I only need call <code>sink.next(T)</code> and the <code>Subscriber&lt;T&gt;</code> instances subscribed to this <code>Publisher&lt;T&gt;</code>  will get the item, <code>T</code></p>
+<p>The <code>Consumer&lt;FluxSink&lt;ProfileCreatedEvent&gt;&gt;</code> construction is used when we create the <code>Flux&lt;T&gt;</code> with <code>Flux.create</code>. This bean is a Java 8 <code>Consumer&lt;T&gt;</code> that <em>accepts</em> an instance of a <code>FluxSink&lt;T&gt;</code>. A <code>FluxSink&lt;T&gt;</code> is a thing into which we can publish new items, however we may arrive at them. If you want to integrate the reactive world with non-reactive code in the outside world, use this construction. I can capture that reference and use it in another thread. For example, I could use it to capture events from Spring Integration, or from some messaging technology, or from <em>anything</em> else, in any other thread. I  need only call <code>sink.next(T)</code> and the <code>Subscriber&lt;T&gt;</code> instances subscribed to this <code>Publisher&lt;T&gt;</code>  will get the item  <code>T</code>.</p>
 </li>
 <li>
 <p>the <code>LinkedBlockingQueue&lt;T&gt;</code> is a marvel of the collections classes in the JDK. <em>Thank you</em>, Josh Bloch, Neal Gafter and Doug Lea! &lt;3</p>
@@ -2154,19 +2154,249 @@ class ProfileCreatedEventPublisher implements
 <p>the event loop couldn&#8217;t be simpler. We wait for new entries to appear int he <code>BlockingQueue&lt;T&gt;</code>..</p>
 </li>
 <li>
-<p>..and as soon as they are, we tell our reactive stream about them by calling <code>FluxSink&lt;T&gt;.next(T)</code>
-===</p>
+<p>..and as soon as they are, we tell our reactive stream about them by calling <code>FluxSink&lt;T&gt;.next(T)</code></p>
 </li>
 </ol>
 </div>
 </div>
+</div>
+<div class="paragraph">
+<p>Whew! There are a few moving pieces here, but ultimately all we&#8217;re trying to do is get the <code>Publisher&lt;T&gt;</code> lined up in such a way that Spring WebFlux can connect it to the websocket protocol and to our clients. Speaking of..</p>
+</div>
+<div class="paragraph">
+<p>You don&#8217;t really need much JavaScript to connect an HTML 5 client to a browser. As a stopgap, just to prove that things are working, let&#8217;s create the simplest of possible clients, a static <code>ws.html</code> page with some barebones JavaScript code.</p>
+</div>
+<div class="exampleblock">
+<div class="title">Example 24. <code>src/main/resources/static/ws.html</code></div>
+<div class="content">
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-javascript" data-lang="javascript">&lt;!DOCTYPE html&gt;
+&lt;html lang="en"&gt;
+&lt;head&gt;
+    &lt;meta charset="utf-8"&gt;
+    &lt;title&gt;Profile notification client
+    &lt;/title&gt;
+&lt;/head&gt;
+&lt;body&gt;
+&lt;script lang="text/javascript"&gt;
+
+    <b class="conum">(1)</b>
+    var socket = new WebSocket('ws://localhost:8080/ws/profiles');
+
+    <b class="conum">(2)</b>
+    socket.addEventListener('message', function (event) {
+      window.alert('message from server: ' + event.data);
+    });
+
+&lt;/script&gt;
+&lt;/body&gt;
+&lt;/html&gt;</code></pre>
+</div>
+</div>
+<div class="colist arabic">
+<ol>
+<li>
+<p>we use an <code>WebSocket</code> object in JavaScript, connecting to the <code>/ws/profiles</code>  endpoint in our Spring Boot application</p>
+</li>
+<li>
+<p>..and whenever a new message arrives we show the JSON in a alert dialog</p>
+</li>
+</ol>
+</div>
+</div>
+</div>
+<div class="paragraph">
+<p>Couldn&#8217;t be simpler! You can drive new results into the system using the following <code>curl</code> incantation:</p>
+</div>
+<div class="exampleblock">
+<div class="title">Example 25. <code>create.sh</code></div>
+<div class="content">
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-shell" data-lang="shell">#!/bin/bash
+port=${1:-8080}
+
+curl -H"content-type: application/json" -d'{"email":"random"}' http://localhost:${port}/profiles</code></pre>
+</div>
+</div>
+<div class="colist arabic">
+<ol>
+<li>
+<p>this will <code>POST</code> a new record into the API which will then trigger a websocket notification if you have the browser client open.</p>
+</li>
+</ol>
+</div>
+</div>
+</div>
+<div class="paragraph">
+<p>Open the <code>ws.htlm</code> page in the browser and then run that <code>create.sh</code> in your shell. I&#8217;m assuming you have <code>curl</code>. This is a trivial end-to-end and it&#8217;s satisfying to see it all come together. That said, we should definitely test this. You know. Just in case..</p>
+</div>
+<div class="sect2">
+<h3 id="_testing_websockets">Testing WebSockets</h3>
+<div class="paragraph">
+<p>We just did an end-to-end test. And that&#8217;s satisfying! But, it&#8217;s not substitute for automation. Let&#8217;s write a test. This time, we want to exercise all the moving parts - the database, the HTTP endpoints, and the websocket support. We&#8217;re going to write more of an integration test than a unit test.</p>
+</div>
+<div class="exampleblock">
+<div class="title">Example 26. <code>src/test/java/com/example/demo/WebSocketConfigurationTest.java</code></div>
+<div class="content">
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-java" data-lang="java">package com.example.demo;
+
+import lombok.extern.log4j.Log4j2;
+import org.assertj.core.api.Assertions;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.reactivestreams.Publisher;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.junit.jupiter.SpringExtension;
+import org.springframework.web.reactive.function.BodyInserters;
+import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.socket.WebSocketMessage;
+import org.springframework.web.reactive.socket.WebSocketSession;
+import org.springframework.web.reactive.socket.client.ReactorNettyWebSocketClient;
+import org.springframework.web.reactive.socket.client.WebSocketClient;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+
+import java.net.URI;
+import java.util.UUID;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicLong;
+
+@Log4j2
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.DEFINED_PORT) <b class="conum">(1)</b>
+@ExtendWith(SpringExtension.class)
+class WebSocketConfigurationTest {
+
+		<b class="conum">(2)</b>
+		private final WebSocketClient socketClient = new ReactorNettyWebSocketClient();
+
+		<b class="conum">(3)</b>
+		private final WebClient webClient = WebClient.builder().build();
+
+		<b class="conum">(4)</b>
+		private Profile generateRandomProfile() {
+				return new Profile(UUID.randomUUID().toString(), UUID.randomUUID().toString() + "@email.com");
+		}
+
+		@Test
+		public void testNotificationsOnUpdates() throws Exception {
+
+				int count = 10; <b class="conum">(5)</b>
+				AtomicLong counter = new AtomicLong(); <b class="conum">(6)</b>
+				URI uri = URI.create("ws://localhost:8080/ws/profiles"); <b class="conum">(7)</b>
+
+				<b class="conum">(8)</b>
+				socketClient.execute(uri, (WebSocketSession session) -&gt; {
+
+						<b class="conum">(9)</b>
+						Mono&lt;WebSocketMessage&gt; out = Mono.just(session.textMessage("test"));
+
+						<b class="conum">(10)</b>
+						Flux&lt;String&gt; in = session
+							.receive()
+							.map(WebSocketMessage::getPayloadAsText);
+
+						<b class="conum">(11)</b>
+						return session
+							.send(out)
+							.thenMany(in)
+							.doOnNext(str -&gt; counter.incrementAndGet())
+							.then();
+
+				}).subscribe();
+
+				<b class="conum">(12)</b>
+				Flux
+					.&lt;Profile&gt;generate(sink -&gt; sink.next(generateRandomProfile()))
+					.take(count)
+					.flatMap(this::write)
+					.blockLast();
+
+				Thread.sleep(1000);
+
+				Assertions.assertThat(counter.get()).isEqualTo(count); <b class="conum">(13)</b>
+		}
+
+		private Publisher&lt;Profile&gt; write(Profile p) {
+				return
+					this.webClient
+						.post()
+						.uri("http://localhost:8080/profiles")
+						.body(BodyInserters.fromObject(p))
+						.retrieve()
+						.bodyToMono(String.class)
+						.thenReturn(p);
+		}
+}</code></pre>
+</div>
+</div>
+<div class="colist arabic">
+<ol>
+<li>
+<p>There are no slices in this test. We&#8217;re starting up the whole application. Spring Boot lets us still exercise some control over things like the port to which the application binds when it starts.</p>
+</li>
+<li>
+<p>Spring WebFlux provides a reactive <code>WebSocketClient</code> that we&#8217;ll use to consume messages coming off of the websocket stream</p>
+</li>
+<li>
+<p>Spring WebFlux also provides a reactive HTTP client, perfect for talking to other microservices.</p>
+</li>
+<li>
+<p>We&#8217;re going to generate some random data and have it written to our MongoDB repository</p>
+</li>
+<li>
+<p>the plan is to write ten items using the  <code>POST</code> endpoint in our API. We&#8217;ll first subscribe to the websocket endpoint and then we&#8217;ll start consuming and confirm that we&#8217;ve got ten records.</p>
+</li>
+<li>
+<p>the websocket notifications will come in asynchronously, so we will use a Java <code>AtomicLong</code> to capture the count in a threadsafe manner</p>
+</li>
+<li>
+<p>Note that we&#8217;re talking to a <code>ws://</code> endpoint, not an <code>http://</code> endpoint</p>
+</li>
+<li>
+<p>the <code>socketClient</code> lets us subscribe to the websocket endppint. It returns a <code>Publisher&lt;T&gt;</code> which this test promptly then subscribes to.</p>
+</li>
+<li>
+<p>We send a throw away message to get the conversation started..</p>
+</li>
+<li>
+<p>then we setup a reactive pipeline to subscribe to any incoming messages coming in from the websocket endpoint as a <code>WebSocketMessage</code> endpoint whose String contents we unpack.</p>
+</li>
+<li>
+<p>we use the <code>WebSocketSession</code> to write and receive data. For each item that&#8217;s returned we increment our <code>AtomicLong</code></p>
+</li>
+<li>
+<p>Now that the websocket subscriber is up and running,  we create a pipeline of elements that gets limited to <code>count</code> elements (<code>10</code>) and then issue <code>count</code> HTTP <code>POST</code> writes to the API using the reactive <code>WebClient</code>. We use <code>blockLast()</code> to force the writes to happen before we proceed to the next line where we compare consumed records.</p>
+</li>
+<li>
+<p>finally, after all the writes have occured and another second of padding to spare has elapsed, we confirm that we&#8217;ve seen <code>count</code> notifications for our <code>count</code> writes.</p>
+</li>
+</ol>
+</div>
+</div>
+</div>
+<div class="paragraph">
+<p>All green! Nothing better than a green test suite, I always say. It looks like things are on the up and up.</p>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_next_steps">Next Steps</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>In our brief time together we&#8217;ve looked at the need for asynchronous IO, the missing computational metaphor, the reactive streams specification, Pivotal&#8217;s Reactor project, Spring&#8217;s new reactive groove, Spring Data Kay and reactive MongoDB, Spring MVC-style HTTP endpoints, functional programming with Java 8 and functional reactive HTTP endpoints, reactive websockets, integration with non-reactive event sources and - through it all - testing! But this is just the beginning. We&#8217;re missing security and a slick HTML client, after all..</p>
 </div>
 </div>
 </div>
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2018-09-16 23:03:10 PDT
+Last updated 2018-09-17 00:18:40 PDT
 </div>
 </div>
 </body>
