@@ -461,12 +461,51 @@ HTTP is great for a request-reply centric interaction with a service. It makes i
 
 Remember those `ApplicationEvent` instances that we published when a new record was created? Our goal now is to connect those events to websockets so that whenever a new event is published, a client gets a websocket notification.
 
-https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API[Websockets] are a  compelling option. They enable two-way communication  - client-to-service and service-to-client on a connection. The protocol is particularly relevant for our use case because it's well supported in browsers. A client connects to a server, sending an HTTP GET request to upgrade the connection to a WebSocket from a simple HTTP request. This is known as handshaking. Once the handhsake is done, clients communicate in an encoded fashion over a different protocol.  It's often used in web applications because it implies HTTP to initiate the discussion. Modern HTTP browsers like Google Chrome and Mozilla's Firefox also support the protocol well, making it a snap to write a trivial JavaScript client that runs in an HTML page. (We'll get to the HTML client in a bit!)
+https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API[Websockets] are a  compelling option. They enable two-way communication  - client-to-service and service-to-client - on a connection. The protocol is particularly relevant for our use case because it's well supported in browsers. A client connects to a server, sending an HTTP GET request to upgrade the connection to a WebSocket from a simple HTTP request. This is known as handshaking. Once the handhsake is done, clients communicate in an encoded fashion over a different protocol.  It's often used in web applications because it implies HTTP to initiate the discussion. Modern HTTP browsers like Google Chrome and Mozilla's Firefox also support the protocol well, making it a snap to write a trivial JavaScript client that runs in an HTML page. (We'll get to the HTML client in a bit!)
 
 It's trivial to speak Websockets in Spring. So far, we've used `Publisher<T>` instances to communicate HTTP requests and responses back and forth. When we use websockets, which is an asynchronous, bi-directional protocol - we'll use.. (you guessed it!): `Publisher<T>` instances!
 
+This is one of the nice things about Spring WebFlux. It's easy to figure out where to go next and how to do it. When in doubt, use a `Publisher<T>`! If you want to send finite payloads to the client as JSON payloads in a REST endpoint, use a `Publisher<T>`! Want to do asynchronous, server-side push using server-sent events (`text/event-stream`)? Use a `Publisher<T>`! Want to communicate using websockets in a bi-directional fashion? Use a `Publisher<T>`! It's much easier to simulate synchronous and blocking IO with an asynchronous API like the reactive streams types than it is to simulate asynchronous APIs with synchronous and blocking types. This is why enterprise application integration is typically done in terms of messaging systems, not RPC.
+
+In Spring MVC you have a more two-sided system: some interactions with the client were synchronous and blocking, and that was the happy path. If you wanted to break out of that arrangement and do something that needs asynchronous IO, like websockets or server-sent events, then the programming model changed profoundly. You'd end up quickly mired in threads or at least threadpools and `Executor` instances, managing threading manually. In Spring WebFlux, you have _one kind of stuff_.
+
 We need to wire up a few objects to get Spring to work well with websockets. This is fairly boilerplate but it's also trivial. We need a `HandlerMapping`, a `WebSocketHandler`, and a `WebSocketHandlerAdapter`.
 
+Let's look at the skeletal configuration in a configuration class, `WebSocketConfiguration`.
+
+.`src/main/java/com/example/demo/WebSocketConfiguration.java`
+====
+[source,java,indent=0]
+----
+include::src/main/java/com/example/demo/WebSocketConfiguration.java[]
+----
+<1> we'll use the custom `Executor` in a bit when we bridge our events to the reactive websocket stream
+<2> the `HandlerMapping` object tells Spring about what handlers are available and what their URLs should be. It sits below the annotation-centric componetn model that we've looked at before.
+<3> Here, we're telling Spring WebFlux to map our `WebSocketHandler` to a particular URI, `/ws/profiles`
+<4> the `WebSocketHandlerAdapter` bridges the websocket support in Spring WebFlux with Spring WebFlux's general routing machinery
+<5> We're going to manually marshal some objects and turn them into JSON to send back to the client
+<6> This dependency is where the rubber meets the road. We'll revisit this in a bit. This is the thing that consumes our application events and forwards them to the reactive websocket stream. We're using a special factory method, `Flux#create(Consumer<? super FluxSink<T>> emitter)`, to create and publish items from our  `Pubisher<T>` manually.
+<7> The `.share()` method is another operator in Reactor. Keep in mind, we're going to have a potentially large number of clients listening to our websocket stream. Each one will need updates when there's new data. We don't want one client consuming the data in one publisher to deprive the other clients of seeing the same data. So, we want to _broadcast_ all the events to multiple subscribers. There's no reason multiple `Subscriber<T>` instances can't subscribe to the same `Publisher<T>`, but without this operator they'd end up exclusively consuming records.
+<8> We're almost there! The interesting code is in our `eventPublisher`. The resulting `Publisher<ProfileCreatedEvent>` will be shared and from there each subscriber needs to transform the data into a `Publisher<WebSocketMessage>` that Spring WebFlux will in turn transform into messages over the websocket protocol.
+<9> Don't forget to call `session.send(Publisher<WebSocketMessage)`! Otherwise none of this will work. :-) Or at least, that's what I'm told. :cough: Not saying it happened to me, or anything.. 'course not..
+====
+
+All that was fairly straightforward, one hopes. Let's look at the most important bit - the `ProfileCreatedEventPublisher`. This code was harder for me to write than it is for you to read. This component needs to act as a bridge; it needs to consume `ProfileCreatedEvent` events and then put them in an in-memory `BlockingQueue<ProfileCreatedEvent>` which our `Publisher<WebSocketMessage>` will drain in another thread.  There's really not that much to it; what you need to understand is the `java.util.concurrent.BlockingQueue<T>` collection, more than anything. A `BlockingQueue<T>` is an interesting beast. If a consumer tries to drain an item from the queue, but the queue is empty, the queue will block until such time as a new item has been offered to the queue. This means we can simple loop forever, waiting for the next item to be added to the queue, and when it's available our code will return and we can publish the event on the `FluxSink<ProfileCreatedEvent> sink` pointer we've been given when the `Flux` is first created. The `Consumer<T>.accept(FluxSink<ProfileCreatedEvent> sink)` method, in this case, is only called once when the application starts up and we try to create the `Flux` for the first time. In that callback we begin the while loop that will constantly try to drain the `BlockingQueue<T>`. This infinite, and un-ending while-loop _blocks_! Naturally. That's the whole point. So, we manage that ourselves using the previously configured `java.util.concurrent.Executor` instance.
+
+
+.`src/main/java/com/example/demo/ProfileCreatedEventPublisher.java`
+====
+[source,java,indent=0]
+----
+include::src/main/java/com/example/demo/ProfileCreatedEventPublisher.java[]
+----
+<1> The `ApplicationListener<ApplicationEvent>` interface is a Spring Framework construction. It tells the framework that we want to be notified, via the  `onApplicationEvent(ProfileCreatedEvent)` method, of any new events published when a new `Profile` is created.
+<2> The `Consumer<FluxSink<ProfileCreatedEvent>>` construction is used when we create the `Flux<T>` with `Flux.create`. This bean is a Java 8 `Consumer<T>` that _accepts_ an instance of a `FluxSink<T>`. A `FluxSink<T>` is a thing into which we can publish new items, however we may arrive at them. If you want to integrate the reactive world with non-reactive code in the outside world, use this construction. I can capture that reference and use it in another thread. For example, I could use it to capture events from Spring Integration, or from some messaging technology, or from _anything_ else, in any other thread. I only need call `sink.next(T)` and the `Subscriber<T>` instances subscribed to this `Publisher<T>`  will get the item, `T`
+<3> the `LinkedBlockingQueue<T>` is a marvel of the collections classes in the JDK. _Thank you_, Josh Bloch, Neal Gafter and Doug Lea! <3
+<4> when an event is published in our service, it is disseminated to any and all interested listeners, including this component which then offers the item into the `Queue<T>`
+<5> the event loop couldn't be simpler. We wait for new entries to appear int he `BlockingQueue<T>`..
+<6> ..and as soon as they are, we tell our reactive stream about them by calling `FluxSink<T>.next(T)`
+===
 
 
 

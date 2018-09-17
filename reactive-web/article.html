@@ -1946,20 +1946,227 @@ public abstract class ProfileEndpointsBaseClass {
 <p>Remember those <code>ApplicationEvent</code> instances that we published when a new record was created? Our goal now is to connect those events to websockets so that whenever a new event is published, a client gets a websocket notification.</p>
 </div>
 <div class="paragraph">
-<p><a href="https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API">Websockets</a> are a  compelling option. They enable two-way communication  - client-to-service and service-to-client on a connection. The protocol is particularly relevant for our use case because it&#8217;s well supported in browsers. A client connects to a server, sending an HTTP GET request to upgrade the connection to a WebSocket from a simple HTTP request. This is known as handshaking. Once the handhsake is done, clients communicate in an encoded fashion over a different protocol.  It&#8217;s often used in web applications because it implies HTTP to initiate the discussion. Modern HTTP browsers like Google Chrome and Mozilla&#8217;s Firefox also support the protocol well, making it a snap to write a trivial JavaScript client that runs in an HTML page. (We&#8217;ll get to the HTML client in a bit!)</p>
+<p><a href="https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API">Websockets</a> are a  compelling option. They enable two-way communication  - client-to-service and service-to-client - on a connection. The protocol is particularly relevant for our use case because it&#8217;s well supported in browsers. A client connects to a server, sending an HTTP GET request to upgrade the connection to a WebSocket from a simple HTTP request. This is known as handshaking. Once the handhsake is done, clients communicate in an encoded fashion over a different protocol.  It&#8217;s often used in web applications because it implies HTTP to initiate the discussion. Modern HTTP browsers like Google Chrome and Mozilla&#8217;s Firefox also support the protocol well, making it a snap to write a trivial JavaScript client that runs in an HTML page. (We&#8217;ll get to the HTML client in a bit!)</p>
 </div>
 <div class="paragraph">
 <p>It&#8217;s trivial to speak Websockets in Spring. So far, we&#8217;ve used <code>Publisher&lt;T&gt;</code> instances to communicate HTTP requests and responses back and forth. When we use websockets, which is an asynchronous, bi-directional protocol - we&#8217;ll use.. (you guessed it!): <code>Publisher&lt;T&gt;</code> instances!</p>
 </div>
 <div class="paragraph">
+<p>This is one of the nice things about Spring WebFlux. It&#8217;s easy to figure out where to go next and how to do it. When in doubt, use a <code>Publisher&lt;T&gt;</code>! If you want to send finite payloads to the client as JSON payloads in a REST endpoint, use a <code>Publisher&lt;T&gt;</code>! Want to do asynchronous, server-side push using server-sent events (<code>text/event-stream</code>)? Use a <code>Publisher&lt;T&gt;</code>! Want to communicate using websockets in a bi-directional fashion? Use a <code>Publisher&lt;T&gt;</code>! It&#8217;s much easier to simulate synchronous and blocking IO with an asynchronous API like the reactive streams types than it is to simulate asynchronous APIs with synchronous and blocking types. This is why enterprise application integration is typically done in terms of messaging systems, not RPC.</p>
+</div>
+<div class="paragraph">
+<p>In Spring MVC you have a more two-sided system: some interactions with the client were synchronous and blocking, and that was the happy path. If you wanted to break out of that arrangement and do something that needs asynchronous IO, like websockets or server-sent events, then the programming model changed profoundly. You&#8217;d end up quickly mired in threads or at least threadpools and <code>Executor</code> instances, managing threading manually. In Spring WebFlux, you have <em>one kind of stuff</em>.</p>
+</div>
+<div class="paragraph">
 <p>We need to wire up a few objects to get Spring to work well with websockets. This is fairly boilerplate but it&#8217;s also trivial. We need a <code>HandlerMapping</code>, a <code>WebSocketHandler</code>, and a <code>WebSocketHandlerAdapter</code>.</p>
+</div>
+<div class="paragraph">
+<p>Let&#8217;s look at the skeletal configuration in a configuration class, <code>WebSocketConfiguration</code>.</p>
+</div>
+<div class="exampleblock">
+<div class="title">Example 22. <code>src/main/java/com/example/demo/WebSocketConfiguration.java</code></div>
+<div class="content">
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-java" data-lang="java">package com.example.demo;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.extern.log4j.Log4j2;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.web.reactive.HandlerMapping;
+import org.springframework.web.reactive.handler.SimpleUrlHandlerMapping;
+import org.springframework.web.reactive.socket.WebSocketHandler;
+import org.springframework.web.reactive.socket.WebSocketMessage;
+import org.springframework.web.reactive.socket.server.support.WebSocketHandlerAdapter;
+import reactor.core.publisher.Flux;
+
+import java.util.Collections;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
+
+@Log4j2
+@Configuration
+class WebSocketConfiguration {
+
+		<b class="conum">(1)</b>
+		@Bean
+		Executor executor() {
+				return Executors.newSingleThreadExecutor();
+		}
+
+		<b class="conum">(2)</b>
+		@Bean
+		HandlerMapping handlerMapping(WebSocketHandler wsh) {
+				return new SimpleUrlHandlerMapping() {
+						{
+								<b class="conum">(3)</b>
+								setUrlMap(Collections.singletonMap("/ws/profiles", wsh));
+								setOrder(10);
+						}
+				};
+		}
+
+		<b class="conum">(4)</b>
+		@Bean
+		WebSocketHandlerAdapter webSocketHandlerAdapter() {
+				return new WebSocketHandlerAdapter();
+		}
+
+		@Bean
+		WebSocketHandler webSocketHandler(
+			ObjectMapper objectMapper, <b class="conum">(5)</b>
+			ProfileCreatedEventPublisher eventPublisher <b class="conum">(6)</b>
+		) {
+
+				Flux&lt;ProfileCreatedEvent&gt; publish = Flux
+					.create(eventPublisher)
+					.share(); <b class="conum">(7)</b>
+
+				return session -&gt; {
+
+						Flux&lt;WebSocketMessage&gt; messageFlux = publish
+							.map(evt -&gt; {
+									try {
+											<b class="conum">(8)</b>
+											return objectMapper.writeValueAsString(evt.getSource());
+									}
+									catch (JsonProcessingException e) {
+											throw new RuntimeException(e);
+									}
+							})
+							.map(str -&gt; {
+									log.info("sending " + str);
+									return session.textMessage(str);
+							});
+
+						return session.send(messageFlux); <b class="conum">(9)</b>
+				};
+		}
+
+}</code></pre>
+</div>
+</div>
+<div class="colist arabic">
+<ol>
+<li>
+<p>we&#8217;ll use the custom <code>Executor</code> in a bit when we bridge our events to the reactive websocket stream</p>
+</li>
+<li>
+<p>the <code>HandlerMapping</code> object tells Spring about what handlers are available and what their URLs should be. It sits below the annotation-centric componetn model that we&#8217;ve looked at before.</p>
+</li>
+<li>
+<p>Here, we&#8217;re telling Spring WebFlux to map our <code>WebSocketHandler</code> to a particular URI, <code>/ws/profiles</code></p>
+</li>
+<li>
+<p>the <code>WebSocketHandlerAdapter</code> bridges the websocket support in Spring WebFlux with Spring WebFlux&#8217;s general routing machinery</p>
+</li>
+<li>
+<p>We&#8217;re going to manually marshal some objects and turn them into JSON to send back to the client</p>
+</li>
+<li>
+<p>This dependency is where the rubber meets the road. We&#8217;ll revisit this in a bit. This is the thing that consumes our application events and forwards them to the reactive websocket stream. We&#8217;re using a special factory method, <code>Flux#create(Consumer&lt;? super FluxSink&lt;T&gt;&gt; emitter)</code>, to create and publish items from our  <code>Pubisher&lt;T&gt;</code> manually.</p>
+</li>
+<li>
+<p>The <code>.share()</code> method is another operator in Reactor. Keep in mind, we&#8217;re going to have a potentially large number of clients listening to our websocket stream. Each one will need updates when there&#8217;s new data. We don&#8217;t want one client consuming the data in one publisher to deprive the other clients of seeing the same data. So, we want to <em>broadcast</em> all the events to multiple subscribers. There&#8217;s no reason multiple <code>Subscriber&lt;T&gt;</code> instances can&#8217;t subscribe to the same <code>Publisher&lt;T&gt;</code>, but without this operator they&#8217;d end up exclusively consuming records.</p>
+</li>
+<li>
+<p>We&#8217;re almost there! The interesting code is in our <code>eventPublisher</code>. The resulting <code>Publisher&lt;ProfileCreatedEvent&gt;</code> will be shared and from there each subscriber needs to transform the data into a <code>Publisher&lt;WebSocketMessage&gt;</code> that Spring WebFlux will in turn transform into messages over the websocket protocol.</p>
+</li>
+<li>
+<p>Don&#8217;t forget to call <code>session.send(Publisher&lt;WebSocketMessage)</code>! Otherwise none of this will work. :-) Or at least, that&#8217;s what I&#8217;m told. :cough: Not saying it happened to me, or anything.. 'course not..</p>
+</li>
+</ol>
+</div>
+</div>
+</div>
+<div class="paragraph">
+<p>All that was fairly straightforward, one hopes. Let&#8217;s look at the most important bit - the <code>ProfileCreatedEventPublisher</code>. This code was harder for me to write than it is for you to read. This component needs to act as a bridge; it needs to consume <code>ProfileCreatedEvent</code> events and then put them in an in-memory <code>BlockingQueue&lt;ProfileCreatedEvent&gt;</code> which our <code>Publisher&lt;WebSocketMessage&gt;</code> will drain in another thread.  There&#8217;s really not that much to it; what you need to understand is the <code>java.util.concurrent.BlockingQueue&lt;T&gt;</code> collection, more than anything. A <code>BlockingQueue&lt;T&gt;</code> is an interesting beast. If a consumer tries to drain an item from the queue, but the queue is empty, the queue will block until such time as a new item has been offered to the queue. This means we can simple loop forever, waiting for the next item to be added to the queue, and when it&#8217;s available our code will return and we can publish the event on the <code>FluxSink&lt;ProfileCreatedEvent&gt; sink</code> pointer we&#8217;ve been given when the <code>Flux</code> is first created. The <code>Consumer&lt;T&gt;.accept(FluxSink&lt;ProfileCreatedEvent&gt; sink)</code> method, in this case, is only called once when the application starts up and we try to create the <code>Flux</code> for the first time. In that callback we begin the while loop that will constantly try to drain the <code>BlockingQueue&lt;T&gt;</code>. This infinite, and un-ending while-loop <em>blocks</em>! Naturally. That&#8217;s the whole point. So, we manage that ourselves using the previously configured <code>java.util.concurrent.Executor</code> instance.</p>
+</div>
+<div class="exampleblock">
+<div class="title">Example 23. <code>src/main/java/com/example/demo/ProfileCreatedEventPublisher.java</code></div>
+<div class="content">
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-java" data-lang="java">package com.example.demo;
+
+import org.springframework.context.ApplicationListener;
+import org.springframework.stereotype.Component;
+import org.springframework.util.ReflectionUtils;
+import reactor.core.publisher.FluxSink;
+
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.Executor;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.function.Consumer;
+
+@Component
+class ProfileCreatedEventPublisher implements
+	ApplicationListener&lt;ProfileCreatedEvent&gt;, <b class="conum">(1)</b>
+	Consumer&lt;FluxSink&lt;ProfileCreatedEvent&gt;&gt; { <b class="conum">(2)</b>
+
+		private final Executor executor;
+		private final BlockingQueue&lt;ProfileCreatedEvent&gt; queue =
+			new LinkedBlockingQueue&lt;&gt;(); <b class="conum">(3)</b>
+
+		ProfileCreatedEventPublisher(Executor executor) {
+				this.executor = executor;
+		}
+
+		<b class="conum">(4)</b>
+		@Override
+		public void onApplicationEvent(ProfileCreatedEvent event) {
+				this.queue.offer(event);
+		}
+
+ 		@Override
+		public void accept(FluxSink&lt;ProfileCreatedEvent&gt; sink) {
+				this.executor.execute(() -&gt; {
+						while (true)
+								try {
+										ProfileCreatedEvent event = queue.take(); <b class="conum">(5)</b>
+										sink.next(event); <b class="conum">(6)</b>
+								}
+								catch (InterruptedException e) {
+										ReflectionUtils.rethrowRuntimeException(e);
+								}
+				});
+		}
+}</code></pre>
+</div>
+</div>
+<div class="colist arabic">
+<ol>
+<li>
+<p>The <code>ApplicationListener&lt;ApplicationEvent&gt;</code> interface is a Spring Framework construction. It tells the framework that we want to be notified, via the  <code>onApplicationEvent(ProfileCreatedEvent)</code> method, of any new events published when a new <code>Profile</code> is created.</p>
+</li>
+<li>
+<p>The <code>Consumer&lt;FluxSink&lt;ProfileCreatedEvent&gt;&gt;</code> construction is used when we create the <code>Flux&lt;T&gt;</code> with <code>Flux.create</code>. This bean is a Java 8 <code>Consumer&lt;T&gt;</code> that <em>accepts</em> an instance of a <code>FluxSink&lt;T&gt;</code>. A <code>FluxSink&lt;T&gt;</code> is a thing into which we can publish new items, however we may arrive at them. If you want to integrate the reactive world with non-reactive code in the outside world, use this construction. I can capture that reference and use it in another thread. For example, I could use it to capture events from Spring Integration, or from some messaging technology, or from <em>anything</em> else, in any other thread. I only need call <code>sink.next(T)</code> and the <code>Subscriber&lt;T&gt;</code> instances subscribed to this <code>Publisher&lt;T&gt;</code>  will get the item, <code>T</code></p>
+</li>
+<li>
+<p>the <code>LinkedBlockingQueue&lt;T&gt;</code> is a marvel of the collections classes in the JDK. <em>Thank you</em>, Josh Bloch, Neal Gafter and Doug Lea! &lt;3</p>
+</li>
+<li>
+<p>when an event is published in our service, it is disseminated to any and all interested listeners, including this component which then offers the item into the <code>Queue&lt;T&gt;</code></p>
+</li>
+<li>
+<p>the event loop couldn&#8217;t be simpler. We wait for new entries to appear int he <code>BlockingQueue&lt;T&gt;</code>..</p>
+</li>
+<li>
+<p>..and as soon as they are, we tell our reactive stream about them by calling <code>FluxSink&lt;T&gt;.next(T)</code>
+===</p>
+</li>
+</ol>
+</div>
+</div>
 </div>
 </div>
 </div>
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2018-09-16 22:12:28 PDT
+Last updated 2018-09-16 23:03:10 PDT
 </div>
 </div>
 </body>

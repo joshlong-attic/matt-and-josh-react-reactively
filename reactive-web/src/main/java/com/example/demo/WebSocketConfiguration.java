@@ -20,34 +20,46 @@ import java.util.concurrent.Executors;
 @Configuration
 class WebSocketConfiguration {
 
+		// <1>
 		@Bean
 		Executor executor() {
 				return Executors.newSingleThreadExecutor();
 		}
 
+		// <2>
 		@Bean
 		HandlerMapping handlerMapping(WebSocketHandler wsh) {
 				return new SimpleUrlHandlerMapping() {
 						{
+								// <3>
 								setUrlMap(Collections.singletonMap("/ws/profiles", wsh));
 								setOrder(10);
 						}
 				};
 		}
 
+		// <4>
+		@Bean
+		WebSocketHandlerAdapter webSocketHandlerAdapter() {
+				return new WebSocketHandlerAdapter();
+		}
 
 		@Bean
 		WebSocketHandler webSocketHandler(
-			ObjectMapper objectMapper,
-			ProfileCreatedEventPublisher profileCreatedEventPublisher) {
+			ObjectMapper objectMapper, // <5>
+			ProfileCreatedEventPublisher eventPublisher //<6>
+		) {
 
-				Flux<ProfileCreatedEvent> publish = Flux.create(profileCreatedEventPublisher).share();
+				Flux<ProfileCreatedEvent> publish = Flux
+					.create(eventPublisher)
+					.share(); // <7>
 
 				return session -> {
 
 						Flux<WebSocketMessage> messageFlux = publish
 							.map(evt -> {
 									try {
+											// <8>
 											return objectMapper.writeValueAsString(evt.getSource());
 									}
 									catch (JsonProcessingException e) {
@@ -59,13 +71,9 @@ class WebSocketConfiguration {
 									return session.textMessage(str);
 							});
 
-						return session.send(messageFlux);
+						return session.send(messageFlux); // <9>
 				};
 		}
 
-		@Bean
-		WebSocketHandlerAdapter webSocketHandlerAdapter() {
-				return new WebSocketHandlerAdapter();
-		}
 }
 

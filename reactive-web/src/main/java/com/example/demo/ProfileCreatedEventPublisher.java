@@ -1,6 +1,5 @@
 package com.example.demo;
 
-import lombok.extern.log4j.Log4j2;
 import org.springframework.context.ApplicationListener;
 import org.springframework.stereotype.Component;
 import org.springframework.util.ReflectionUtils;
@@ -11,37 +10,32 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.function.Consumer;
 
-/**
-	* @author <a href="mailto:josh@joshlong.com">Josh Long</a>
-	*/
-@Log4j2
 @Component
 class ProfileCreatedEventPublisher implements
-	ApplicationListener<ProfileCreatedEvent>,
-	Consumer<FluxSink<ProfileCreatedEvent>> {
+	ApplicationListener<ProfileCreatedEvent>, // <1>
+	Consumer<FluxSink<ProfileCreatedEvent>> { //<2>
 
 		private final Executor executor;
-		private final BlockingQueue<ProfileCreatedEvent> queue = new LinkedBlockingQueue<>();
+		private final BlockingQueue<ProfileCreatedEvent> queue =
+			new LinkedBlockingQueue<>(); // <3>
 
 		ProfileCreatedEventPublisher(Executor executor) {
 				this.executor = executor;
 		}
 
+		// <4>
 		@Override
 		public void onApplicationEvent(ProfileCreatedEvent event) {
 				this.queue.offer(event);
-				log.info("queue.offer(" + event + ")");
 		}
 
-		@Override
+ 		@Override
 		public void accept(FluxSink<ProfileCreatedEvent> sink) {
 				this.executor.execute(() -> {
 						while (true)
 								try {
-										log.info("take()'ing the next result...");
-										ProfileCreatedEvent event = queue.take();
-										sink.next(event);
-										log.info("sink.next(" + event + ")");
+										ProfileCreatedEvent event = queue.take(); // <5>
+										sink.next(event); // <6>
 								}
 								catch (InterruptedException e) {
 										ReflectionUtils.rethrowRuntimeException(e);
