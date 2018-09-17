@@ -1,28 +1,37 @@
 package com.example.demo;
 
+import lombok.extern.log4j.Log4j2;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mockito;
+import org.springframework.boot.test.autoconfigure.web.reactive.WebFluxTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.junit.jupiter.SpringExtension;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.util.UUID;
 
-public class ProfileEndpointsBaseClass {
+@Log4j2
+@WebFluxTest
+@ExtendWith(SpringExtension.class)
+abstract public class ProfileEndpointsBaseClass {
 
 		private final WebTestClient client;
 
 		@MockBean
 		private ProfileRepository repository;
 
-		public ProfileEndpointsBaseClass (  WebTestClient client) {
+		public ProfileEndpointsBaseClass(WebTestClient client) {
 				this.client = client;
 		}
 
 		@Test
 		public void getAll() {
+
+				log.info("running  "+ this.getClass().getName());
 
 				Mockito
 					.when(this.repository.findAll())

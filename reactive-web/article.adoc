@@ -280,6 +280,12 @@ include::src/main/java/com/example/demo/SampleDataInitializer.java[]
 <9> If we'd stopped at the previous line, the `save` operation, and run this program then we would see.. nothing! `Publisher<T>`  instances are _lazy_ - you need to `subscribe()` to them to trigger their execution. This last line is where the rubber meets the road. In this case, we're using the `subscribe(Consumer<T>)` variant that lets us visit every record returned from the `repository.findAll()` operation and print out the record.
 ====
 
+
+
+> TIP: You can activate a Spring profile with a command line switch, `-Dspring.profiles.active=foo` where `foo` is the name of the profile you'd like to activate. You can also set an environment variable, `export SPRING_PROFILES_ACTIVE=foo` before running the `java` process for your Spring Boot application.
+
+
+
 You'll note that in the previous example we use two methods, `map(T)` and `flatMap(T)`. Map should be familiar if you've ever used the Java 8 `Stream` API. Map visits each record in a publisher and passes it through a lambda function which must transform it. The output of that transformation is then returned and accumulated into a new `Publisher`. So, the intermediate type after we return from our `map` operation is a `Publisher<Profile>`. In the next line we then call `flatMap`. `flatMap` is just like `map`, except that it unpacks the return value of the lambda given if the value is itself contained in a `Publisher<T>`. In our case, the `repository.save(T)` method returns a `Mono<T>`. If we'd used `.map` instead of `flatMap(T)`, we'd have a `Flux<Mono<T>>`, when what we really want is a `Flux<T>`. We can cleanly solve this problem usig `flatMap`.
 
 == A Reactive Service
@@ -422,12 +428,25 @@ include::src/main/java/com/example/demo/ProfileHandler.java[]
 ====
 
 
-Straightforward, right? I like this approach - the handler object centralizes processing for related   resources into a single class, just like with the controller-style arrangement. We're also able to centralize routing logic in the `@Configuration` class. This means it's easier to see at a glance what routes have been configured. It's easier to refactor routing. Routing is also now more dynamic. We can change how requests are matched, and we can dynamically contribute endpoints. The only drawback to this style is that your code is inextricably tied to the Spring WebFlux component model. Your handler methods in the `ProfileHandler` are, no question at all, tied to Spring WebFlux. From where I sit, that's OK. A controller is supposed to be a thin adapter layer on top of your service. Most of the business logic lives in the service layer, or below. I can easily unit test my service. Testing my HTTP endpoints requires something altogether different..
+Straightforward, right? I like this approach - the handler object centralizes processing for related resources into a single class, just like with the controller-style arrangement. We're also able to centralize routing logic in the `@Configuration` class. This means it's easier to see at a glance what routes have been configured. It's easier to refactor routing. Routing is also now more dynamic. We can change how requests are matched, and we can dynamically contribute endpoints. The only drawback to this style is that your code is inextricably tied to the Spring WebFlux component model. Your handler methods in the `ProfileHandler` are, no question at all, tied to Spring WebFlux. From where I sit, that's OK. A controller is supposed to be a thin adapter layer on top of your service. Most of the business logic lives in the service layer, or below. As we've already seen, we can easily unit test my service. And anyway, testing my HTTP endpoints requires something altogether different...
 
 
 === Testing the HTTTP Endpoints
 
+We've seen two implementations of the same HTTP endpoints in this application. The classic endpoints are annotated with `@Profile("classic")`  where as the functional reactive endpoints are annotated with `@Profile("default")`. If no other profile is active, any bean tagged with the `default` profile will be active. So, if you _don't_ specify `classic`, the `default` bean will activate. We should test both, even if they're just for demonstration purposes. I've extracted all the tests into a base class that I'll extend twice. Each subclass will isolate one or the other set of HTTP endpoints.
 
+First, let's look at the base class, which contains the most important aspects of testing our HTTP endpoints.
+
+
+
+.`src/test/java/com/example/demo/ProfileEndpointsBaseClass.java`
+====
+[source,java,indent=0]
+----
+include::src/test/java/com/example/demo/ProfileEndpointsBaseClass.java[]
+----
+<1>
+====
 
 
 

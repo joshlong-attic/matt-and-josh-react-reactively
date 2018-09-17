@@ -807,6 +807,9 @@ public interface Processor&lt;T, R&gt; extends Subscriber&lt;T&gt;, Publisher&lt
     &lt;/parent&gt;
 
     &lt;properties&gt;
+        &lt;maven-failsafe-plugin.version&gt;2.22.0&lt;/maven-failsafe-plugin.version&gt;
+        &lt;maven-surefire-plugin.version&gt;2.22.0&lt;/maven-surefire-plugin.version&gt;
+
         &lt;project.build.sourceEncoding&gt;UTF-8&lt;/project.build.sourceEncoding&gt;
         &lt;project.reporting.outputEncoding&gt;UTF-8&lt;/project.reporting.outputEncoding&gt;
         &lt;java.version&gt;1.8&lt;/java.version&gt;
@@ -1107,6 +1110,22 @@ class SampleDataInitializer
 </ol>
 </div>
 </div>
+</div>
+<div class="quoteblock">
+<blockquote>
+<div class="admonitionblock tip">
+<table>
+<tr>
+<td class="icon">
+<div class="title">Tip</div>
+</td>
+<td class="content">
+You can activate a Spring profile with a command line switch, <code>-Dspring.profiles.active=foo</code> where <code>foo</code> is the name of the profile you&#8217;d like to activate. You can also set an environment variable, <code>export SPRING_PROFILES_ACTIVE=foo</code> before running the <code>java</code> process for your Spring Boot application.
+</td>
+</tr>
+</table>
+</div>
+</blockquote>
 </div>
 <div class="paragraph">
 <p>You&#8217;ll note that in the previous example we use two methods, <code>map(T)</code> and <code>flatMap(T)</code>. Map should be familiar if you&#8217;ve ever used the Java 8 <code>Stream</code> API. Map visits each record in a publisher and passes it through a lambda function which must transform it. The output of that transformation is then returned and accumulated into a new <code>Publisher</code>. So, the intermediate type after we return from our <code>map</code> operation is a <code>Publisher&lt;Profile&gt;</code>. In the next line we then call <code>flatMap</code>. <code>flatMap</code> is just like <code>map</code>, except that it unpacks the return value of the lambda given if the value is itself contained in a <code>Publisher&lt;T&gt;</code>. In our case, the <code>repository.save(T)</code> method returns a <code>Mono&lt;T&gt;</code>. If we&#8217;d used <code>.map</code> instead of <code>flatMap(T)</code>, we&#8217;d have a <code>Flux&lt;Mono&lt;T&gt;&gt;</code>, when what we really want is a <code>Flux&lt;T&gt;</code>. We can cleanly solve this problem usig <code>flatMap</code>.</p>
@@ -1412,6 +1431,7 @@ import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
 import java.net.URI;
+
 
 @RestController <b class="conum">(1)</b>
 @RequestMapping(value = "/profiles", produces = MediaType.APPLICATION_JSON_VALUE)  <b class="conum">(2)</b>
@@ -1720,19 +1740,167 @@ class ProfileHandler {
 </div>
 </div>
 <div class="paragraph">
-<p>Straightforward, right? I like this approach - the handler object centralizes processing for related   resources into a single class, just like with the controller-style arrangement. We&#8217;re also able to centralize routing logic in the <code>@Configuration</code> class. This means it&#8217;s easier to see at a glance what routes have been configured. It&#8217;s easier to refactor routing. Routing is also now more dynamic. We can change how requests are matched, and we can dynamically contribute endpoints. The only drawback to this style is that your code is inextricably tied to the Spring WebFlux component model. Your handler methods in the <code>ProfileHandler</code> are, no question at all, tied to Spring WebFlux. From where I sit, that&#8217;s OK. A controller is supposed to be a thin adapter layer on top of your service. Most of the business logic lives in the service layer, or below. I can easily unit test my service. Testing my HTTP endpoints requires something altogether different..</p>
+<p>Straightforward, right? I like this approach - the handler object centralizes processing for related resources into a single class, just like with the controller-style arrangement. We&#8217;re also able to centralize routing logic in the <code>@Configuration</code> class. This means it&#8217;s easier to see at a glance what routes have been configured. It&#8217;s easier to refactor routing. Routing is also now more dynamic. We can change how requests are matched, and we can dynamically contribute endpoints. The only drawback to this style is that your code is inextricably tied to the Spring WebFlux component model. Your handler methods in the <code>ProfileHandler</code> are, no question at all, tied to Spring WebFlux. From where I sit, that&#8217;s OK. A controller is supposed to be a thin adapter layer on top of your service. Most of the business logic lives in the service layer, or below. As we&#8217;ve already seen, we can easily unit test my service. And anyway, testing my HTTP endpoints requires something altogether different&#8230;&#8203;</p>
 </div>
 </div>
 <div class="sect2">
 <h3 id="_testing_the_htttp_endpoints">Testing the HTTTP Endpoints</h3>
+<div class="paragraph">
+<p>We&#8217;ve seen two implementations of the same HTTP endpoints in this application. The classic endpoints are annotated with <code>@Profile("classic")</code>  where as the functional reactive endpoints are annotated with <code>@Profile("default")</code>. If no other profile is active, any bean tagged with the <code>default</code> profile will be active. So, if you <em>don&#8217;t</em> specify <code>classic</code>, the <code>default</code> bean will activate. We should test both, even if they&#8217;re just for demonstration purposes. I&#8217;ve extracted all the tests into a base class that I&#8217;ll extend twice. Each subclass will isolate one or the other set of HTTP endpoints.</p>
+</div>
+<div class="paragraph">
+<p>First, let&#8217;s look at the base class, which contains the most important aspects of testing our HTTP endpoints.</p>
+</div>
+<div class="exampleblock">
+<div class="title">Example 21. <code>src/test/java/com/example/demo/ProfileEndpointsBaseClass.java</code></div>
+<div class="content">
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-java" data-lang="java">package com.example.demo;
 
+import lombok.extern.log4j.Log4j2;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mockito;
+import org.springframework.boot.test.autoconfigure.web.reactive.WebFluxTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.http.MediaType;
+import org.springframework.test.context.junit.jupiter.SpringExtension;
+import org.springframework.test.web.reactive.server.WebTestClient;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+
+import java.util.UUID;
+
+@Log4j2
+@WebFluxTest
+@ExtendWith(SpringExtension.class)
+abstract public class ProfileEndpointsBaseClass {
+
+		private final WebTestClient client;
+
+		@MockBean
+		private ProfileRepository repository;
+
+		public ProfileEndpointsBaseClass(WebTestClient client) {
+				this.client = client;
+		}
+
+		@Test
+		public void getAll() {
+
+				log.info("running  "+ this.getClass().getName());
+
+				Mockito
+					.when(this.repository.findAll())
+					.thenReturn(Flux.just(new Profile("1", "A"), new Profile("2", "B")));
+
+				this.client
+					.get()
+					.uri("/profiles")
+					.accept(MediaType.APPLICATION_JSON_UTF8)
+					.exchange()
+					.expectStatus().isOk()
+					.expectHeader().contentType(MediaType.APPLICATION_JSON_UTF8)
+					.expectBody()
+					.jsonPath("$.[0].id").isEqualTo("1")
+					.jsonPath("$.[0].email").isEqualTo("A")
+					.jsonPath("$.[1].id").isEqualTo("2")
+					.jsonPath("$.[1].email").isEqualTo("B");
+		}
+
+		@Test
+		public void save() {
+				Profile data = new Profile("123", UUID.randomUUID().toString() + "@email.com");
+				Mockito
+					.when(this.repository.save(Mockito.any(Profile.class)))
+					.thenReturn(Mono.just(data));
+				MediaType jsonUtf8 = MediaType.APPLICATION_JSON_UTF8;
+				this
+					.client
+					.post()
+					.uri("/profiles")
+					.contentType(jsonUtf8)
+					.body(Mono.just(data), Profile.class)
+					.exchange()
+					.expectStatus().isCreated()
+					.expectHeader().contentType(jsonUtf8);
+		}
+
+		@Test
+		public void delete() {
+				Profile data = new Profile("123", UUID.randomUUID().toString() + "@email.com");
+				Mockito
+					.when(this.repository.findById(data.getId()))
+					.thenReturn(Mono.just(data));
+				Mockito
+					.when(this.repository.deleteById(data.getId()))
+					.thenReturn(Mono.empty());
+				this
+					.client
+					.delete()
+					.uri("/profiles/" + data.getId())
+					.exchange()
+					.expectStatus().isOk();
+		}
+
+		@Test
+		public void update() {
+				Profile data = new Profile("123", UUID.randomUUID().toString() + "@email.com");
+
+				Mockito
+					.when(this.repository.findById(data.getId()))
+					.thenReturn(Mono.just(data));
+
+				Mockito
+					.when(this.repository.save(data))
+					.thenReturn(Mono.just(data));
+
+				this
+					.client
+					.put()
+					.uri("/profiles/" + data.getId())
+					.contentType(MediaType.APPLICATION_JSON_UTF8)
+					.body(Mono.just(data), Profile.class)
+					.exchange()
+					.expectStatus().isOk();
+		}
+
+		@Test
+		public void getById() {
+
+				Profile data = new Profile("1", "A");
+
+				Mockito
+					.when(this.repository.findById(data.getId()))
+					.thenReturn(Mono.just(data));
+
+				this.client
+					.get()
+					.uri("/profiles/" + data.getId())
+					.accept(MediaType.APPLICATION_JSON_UTF8)
+					.exchange()
+					.expectStatus().isOk()
+					.expectHeader().contentType(MediaType.APPLICATION_JSON_UTF8)
+					.expectBody()
+					.jsonPath("$.id").isEqualTo(data.getId())
+					.jsonPath("$.email").isEqualTo(data.getEmail());
+		}
+}</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>&lt;1&gt;</p>
+</div>
+</div>
+</div>
 </div>
 </div>
 </div>
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2018-09-16 20:26:26 PDT
+Last updated 2018-09-16 20:42:52 PDT
 </div>
 </div>
 </body>

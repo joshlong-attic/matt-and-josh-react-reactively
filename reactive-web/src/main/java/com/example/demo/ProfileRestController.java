@@ -8,6 +8,7 @@ import reactor.core.publisher.Mono;
 
 import java.net.URI;
 
+
 @RestController // <1>
 @RequestMapping(value = "/profiles", produces = MediaType.APPLICATION_JSON_VALUE)  // <2>
 @org.springframework.context.annotation.Profile("classic")
