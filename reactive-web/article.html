@@ -1704,7 +1704,7 @@ class ProfileHandler {
 <div class="colist arabic">
 <ol>
 <li>
-<p>as before, we&#8217;re going to make use of our <code>ProfileService</code> to do our work</p>
+<p>as before, we&#8217;re going to make use of our <code>ProfileService</code> to do the heavy lifting</p>
 </li>
 <li>
 <p>each handler method has an identical signature: <code>SeverRequest</code> is the request parameter and <code>Mono&lt;ServerResponse&gt;</code> is the return value.</p>
@@ -1713,19 +1713,26 @@ class ProfileHandler {
 <p>we can centralize common logic in, yep! - you guessed it! - functions. This function creates a <code>Mono&lt;ServerResponse&gt;</code> from a <code>Publisher&lt;Profile&gt;</code> for any incoming request. Each request uses the <code>ServerResponse</code> builder object to create a response that has a <code>Location</code> header, a <code>Content-Type</code> header, and no payload. (You don&#8217;t need to send a payload in the response for <code>PUT</code> or <code>POST</code>, for example).</p>
 </li>
 <li>
-<p>this method centralizes all configuration for replies to read requests (for instance, those coming from <code>GET</code>)</p>
+<p>this method centralizes all configuration for replies to read requests (for instance, those coming from <code>GET</code> verbs)</p>
 </li>
 </ol>
 </div>
 </div>
 </div>
+<div class="paragraph">
+<p>Straightforward, right? I like this approach - the handler object centralizes processing for related   resources into a single class, just like with the controller-style arrangement. We&#8217;re also able to centralize routing logic in the <code>@Configuration</code> class. This means it&#8217;s easier to see at a glance what routes have been configured. It&#8217;s easier to refactor routing. Routing is also now more dynamic. We can change how requests are matched, and we can dynamically contribute endpoints. The only drawback to this style is that your code is inextricably tied to the Spring WebFlux component model. Your handler methods in the <code>ProfileHandler</code> are, no question at all, tied to Spring WebFlux. From where I sit, that&#8217;s OK. A controller is supposed to be a thin adapter layer on top of your service. Most of the business logic lives in the service layer, or below. I can easily unit test my service. Testing my HTTP endpoints requires something altogether different..</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_testing_the_htttp_endpoints">Testing the HTTTP Endpoints</h3>
+
 </div>
 </div>
 </div>
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2018-09-16 19:26:35 PDT
+Last updated 2018-09-16 20:26:26 PDT
 </div>
 </div>
 </body>

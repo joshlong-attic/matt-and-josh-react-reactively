@@ -397,8 +397,6 @@ We make judicious use of static imports in this example to make things as concis
 Spring WebFlux provides a DSL for describing how to match incoming requests.  `GET("/profiles")` results in a `RequestPredicate` that matches incoming HTTP `GET`-method requests that are routed to the URI `/profiles`. You can compose `RequestPredicate` instances using `.and(RequestPredicate)`, `.not(RequestPredicate)`, or `.or(RequestPredicate)`. In this example, I also provide a fairly trivial adapter -  `CaseInsensitiveRequestPredicate` - that lower-cases all incoming URLs and matches it against the configured (and lower-cased) URI in the `RequestPredicate`. The result is that if you type `http://localhost:8080/profiles` or `http://localhost:8080/PROfiLEs` they'll both work.
 
 
-
-
 .`src/main/java/com/example/demo/CaseInsensitiveRequestPredicate.java`
 ====
 [source,java,indent=0]
@@ -409,9 +407,7 @@ include::src/main/java/com/example/demo/CaseInsensitiveRequestPredicate.java[]
 <2> My implementation wraps the incoming `ServerRequest`, a common enough task that Spring WebFlux even provides a `ServerRequestWrapper`
 ====
 
-
 Once a request is matched, the `HandlerFunction<ServerResponse>` is invoked to produce a response. Let's look at our handler object.
-
 
 .`src/main/java/com/example/demo/ProfileHandler.java`
 ====
@@ -419,8 +415,20 @@ Once a request is matched, the `HandlerFunction<ServerResponse>` is invoked to p
 ----
 include::src/main/java/com/example/demo/ProfileHandler.java[]
 ----
-<1> as before, we're going to make use of our `ProfileService` to do our work
+<1> as before, we're going to make use of our `ProfileService` to do the heavy lifting
 <2> each handler method has an identical signature: `SeverRequest` is the request parameter and `Mono<ServerResponse>` is the return value.
 <3> we can centralize common logic in, yep! - you guessed it! - functions. This function creates a `Mono<ServerResponse>` from a `Publisher<Profile>` for any incoming request. Each request uses the `ServerResponse` builder object to create a response that has a `Location` header, a `Content-Type` header, and no payload. (You don't need to send a payload in the response for `PUT` or `POST`, for example).
-<4> this method centralizes all configuration for replies to read requests (for instance, those coming from `GET`)
+<4> this method centralizes all configuration for replies to read requests (for instance, those coming from `GET` verbs)
 ====
+
+
+Straightforward, right? I like this approach - the handler object centralizes processing for related   resources into a single class, just like with the controller-style arrangement. We're also able to centralize routing logic in the `@Configuration` class. This means it's easier to see at a glance what routes have been configured. It's easier to refactor routing. Routing is also now more dynamic. We can change how requests are matched, and we can dynamically contribute endpoints. The only drawback to this style is that your code is inextricably tied to the Spring WebFlux component model. Your handler methods in the `ProfileHandler` are, no question at all, tied to Spring WebFlux. From where I sit, that's OK. A controller is supposed to be a thin adapter layer on top of your service. Most of the business logic lives in the service layer, or below. I can easily unit test my service. Testing my HTTP endpoints requires something altogether different..
+
+
+=== Testing the HTTTP Endpoints
+
+
+
+
+
+
