@@ -15,13 +15,13 @@ import reactor.core.publisher.Mono;
 import java.util.UUID;
 
 @Log4j2
-@WebFluxTest
+@WebFluxTest // <1>
 @ExtendWith(SpringExtension.class)
-abstract public class ProfileEndpointsBaseClass {
+public abstract class ProfileEndpointsBaseClass {
 
-		private final WebTestClient client;
+		private final WebTestClient client; // <2>
 
-		@MockBean
+		@MockBean  // <3>
 		private ProfileRepository repository;
 
 		public ProfileEndpointsBaseClass(WebTestClient client) {
@@ -31,12 +31,14 @@ abstract public class ProfileEndpointsBaseClass {
 		@Test
 		public void getAll() {
 
-				log.info("running  "+ this.getClass().getName());
+				log.info("running  " + this.getClass().getName());
 
+				// <4>
 				Mockito
 					.when(this.repository.findAll())
 					.thenReturn(Flux.just(new Profile("1", "A"), new Profile("2", "B")));
 
+				// <5>
 				this.client
 					.get()
 					.uri("/profiles")

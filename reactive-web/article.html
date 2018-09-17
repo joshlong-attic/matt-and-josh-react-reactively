@@ -779,7 +779,7 @@ public interface Processor&lt;T, R&gt; extends Subscriber&lt;T&gt;, Publisher&lt
 </div>
 </div>
 <div class="paragraph">
-<p>Our Maven build file, <code>pom.xml</code>, is pretty plain, but it assumes we&#8217;re going to use JUnit 4. Let&#8217;s upgrade JUnit to use JUnit 5, which is a more modern testing framework that&#8217;s well supported by Spring Framework 5 and beyond. This owes in no small part to the fact that the lead of JUnit 5, Sam Brennan, is also the lead of the Spring Test framework. Add the following dependencies to your new application&#8217;s build file, <code>pom.xml</code>: <code>org.junit.jupiter</code>:`junit-jupiter-engine` and give it a <code>scope</code> of <code>test</code>. Then, exclude the <code>junit</code>:`junit` dependency from the <code>spring-boot-starter-test</code> dependency. This is   the resulting Maven <code>pom.xml</code>:</p>
+<p>Our Maven build file, <code>pom.xml</code>, is pretty plain, but it assumes we&#8217;re going to use JUnit 4. Let&#8217;s upgrade JUnit to use JUnit 5, which is a more modern testing framework that&#8217;s well supported by Spring Framework 5 and beyond. This owes in no small part to the fact that the lead of JUnit 5, Sam Brennan, is also the lead of the Spring Test framework. Add the following dependencies to your new application&#8217;s build file, <code>pom.xml</code>: <code>org.junit.jupiter</code>:`junit-jupiter-engine` and give it a <code>scope</code> of <code>test</code>. Then, exclude the <code>junit</code>:`junit` dependency from the <code>spring-boot-starter-test</code> dependency.  As of this writing, in September 2018, you <em>also</em> need to manually update the version of the Failsafe and Surefire Maven plugins in your Maven build&#8217;s <code>properties</code> stanza. This is the resulting Maven <code>pom.xml</code>:</p>
 </div>
 <div class="exampleblock">
 <div class="title">Example 8. <code>pom.xml</code></div>
@@ -807,12 +807,14 @@ public interface Processor&lt;T, R&gt; extends Subscriber&lt;T&gt;, Publisher&lt
     &lt;/parent&gt;
 
     &lt;properties&gt;
+
         &lt;maven-failsafe-plugin.version&gt;2.22.0&lt;/maven-failsafe-plugin.version&gt;
         &lt;maven-surefire-plugin.version&gt;2.22.0&lt;/maven-surefire-plugin.version&gt;
 
         &lt;project.build.sourceEncoding&gt;UTF-8&lt;/project.build.sourceEncoding&gt;
         &lt;project.reporting.outputEncoding&gt;UTF-8&lt;/project.reporting.outputEncoding&gt;
         &lt;java.version&gt;1.8&lt;/java.version&gt;
+
     &lt;/properties&gt;
 
     &lt;dependencies&gt;
@@ -1746,10 +1748,10 @@ class ProfileHandler {
 <div class="sect2">
 <h3 id="_testing_the_htttp_endpoints">Testing the HTTTP Endpoints</h3>
 <div class="paragraph">
-<p>We&#8217;ve seen two implementations of the same HTTP endpoints in this application. The classic endpoints are annotated with <code>@Profile("classic")</code>  where as the functional reactive endpoints are annotated with <code>@Profile("default")</code>. If no other profile is active, any bean tagged with the <code>default</code> profile will be active. So, if you <em>don&#8217;t</em> specify <code>classic</code>, the <code>default</code> bean will activate. We should test both, even if they&#8217;re just for demonstration purposes. I&#8217;ve extracted all the tests into a base class that I&#8217;ll extend twice. Each subclass will isolate one or the other set of HTTP endpoints.</p>
+<p>We&#8217;ve seen two implementations of the same HTTP endpoints in this application. The classic endpoints are annotated with <code>@Profile("classic")</code>  where as the functional reactive endpoints are annotated with <code>@Profile("default")</code>. If no other profile is active, any bean tagged with the <code>default</code> profile will be active. So, if you <em>don&#8217;t</em> specify <code>classic</code>, the <code>default</code> bean will activate. We should test both, even if they&#8217;re just for demonstration purposes. I&#8217;ve extracted all the tests into a base class that I&#8217;ll extend twice, activating each of the two profiles to test in isolation each of the HTTP endpoint styles.</p>
 </div>
 <div class="paragraph">
-<p>First, let&#8217;s look at the base class, which contains the most important aspects of testing our HTTP endpoints.</p>
+<p>First, let&#8217;s look at the base class, which contains the most important aspects of testing our HTTP endpoints. This base class is <code>abstract</code> -</p>
 </div>
 <div class="exampleblock">
 <div class="title">Example 21. <code>src/test/java/com/example/demo/ProfileEndpointsBaseClass.java</code></div>
@@ -1773,13 +1775,13 @@ import reactor.core.publisher.Mono;
 import java.util.UUID;
 
 @Log4j2
-@WebFluxTest
+@WebFluxTest <b class="conum">(1)</b>
 @ExtendWith(SpringExtension.class)
-abstract public class ProfileEndpointsBaseClass {
+public abstract class ProfileEndpointsBaseClass {
 
-		private final WebTestClient client;
+		private final WebTestClient client; <b class="conum">(2)</b>
 
-		@MockBean
+		@MockBean  <b class="conum">(3)</b>
 		private ProfileRepository repository;
 
 		public ProfileEndpointsBaseClass(WebTestClient client) {
@@ -1789,12 +1791,14 @@ abstract public class ProfileEndpointsBaseClass {
 		@Test
 		public void getAll() {
 
-				log.info("running  "+ this.getClass().getName());
+				log.info("running  " + this.getClass().getName());
 
+				<b class="conum">(4)</b>
 				Mockito
 					.when(this.repository.findAll())
 					.thenReturn(Flux.just(new Profile("1", "A"), new Profile("2", "B")));
 
+				<b class="conum">(5)</b>
 				this.client
 					.get()
 					.uri("/profiles")
@@ -1889,18 +1893,73 @@ abstract public class ProfileEndpointsBaseClass {
 }</code></pre>
 </div>
 </div>
+<div class="colist arabic">
+<ol>
+<li>
+<p>this is a another test slice. This one will test only the web tier, ignoring all the data tier functionality.</p>
+</li>
+<li>
+<p>This will also contribute a mock HTTP client, the <code>WebTestClient</code>, that we can use to exercise the HTTP endpoints. This is a <em>mock</em> client - it will not actually issue HTTP requests over the wire. The network stack is virtual. It&#8217;ll exercise our HTTP endpoints, and all the Spring machinery, without connecting a server socket.</p>
+</li>
+<li>
+<p>As this is a test slice, focused only on the HTTP components in Spring, we&#8217;re going to run into a problem. Our HTTP controllers depend on our service, and our service in turn depends on the reactive Spring Data MongoDB repository. The repository is part of the data tier. We use the Spring Boot annotation, <code>@MockBean</code>, to tell Spring Boot to create a Mockito-backed mock of the same type and - most importantly - to either contribute the mock to the Spring <code>ApplicationContext</code> if a bean of the same type doesn&#8217;t already exist or to replace any bean of the same type with the mock in the Spring <code>ApplicationContext</code>.</p>
+</li>
+<li>
+<p>Since it&#8217;s just a Mockito-backed mock, we use Mockito to preprogram the stub so that it&#8217;ll return the pre-programmed responses</p>
+</li>
+<li>
+<p>Finally, we can use the <code>WebTestClient</code>. The <code>WebTestClient</code> lets us issue requests to our HTTP endpoints and then assert certain things about the response.</p>
+</li>
+</ol>
+</div>
+</div>
+</div>
 <div class="paragraph">
-<p>&lt;1&gt;</p>
+<p>The <code>WebTestClient</code> is quite powerful. It&#8217;s a test-centric alternative to the reactive <code>WebClient</code> in Spring WebFlux which is an honest-to-goodness reactive HTTP client. In this  example, we make an HTTP request to an endpoint, confirm that the returned status code and headers line up with expectations, and then use  JSON Path  to poke at the structure of the returned result.</p>
+</div>
+<div class="quoteblock">
+<blockquote>
+<div class="admonitionblock tip">
+<table>
+<tr>
+<td class="icon">
+<div class="title">Tip</div>
+</td>
+<td class="content">
+<a href="https://github.com/json-path/JsonPath">JSON Path</a> is like XPath, a query language for declaratively traversing nodes in an XML document. It allows easy traversal of JSON stanzas. It also provides a predicate language which we can use to match.
+</td>
+</tr>
+</table>
+</div>
+</blockquote>
+</div>
+<div class="paragraph">
+<p>HTTP is great for a request-reply centric interaction with a service. It makes it easy to interrogate the HTTP service and get a response. But what if we&#8217;re interested in listening to events? We don&#8217;t want to constantly poll - we&#8217;d rather the service tell us when something is happening. Our service supports creating and updating records. As a client to such a service, it&#8217;d be nice to have a firehose endpoint - but don&#8217;t tell Twitter that! We could subscribe to such an endpoint and update the client state whenever there&#8217;s a new record. We need a fully duplexed protocol to maintain a connection to the client and push data to the client from the service&#8230;&#8203;</p>
 </div>
 </div>
 </div>
+</div>
+<div class="sect1">
+<h2 id="_reactive_websockets">Reactive WebSockets</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Remember those <code>ApplicationEvent</code> instances that we published when a new record was created? Our goal now is to connect those events to websockets so that whenever a new event is published, a client gets a websocket notification.</p>
+</div>
+<div class="paragraph">
+<p><a href="https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API">Websockets</a> are a  compelling option. They enable two-way communication  - client-to-service and service-to-client on a connection. The protocol is particularly relevant for our use case because it&#8217;s well supported in browsers. A client connects to a server, sending an HTTP GET request to upgrade the connection to a WebSocket from a simple HTTP request. This is known as handshaking. Once the handhsake is done, clients communicate in an encoded fashion over a different protocol.  It&#8217;s often used in web applications because it implies HTTP to initiate the discussion. Modern HTTP browsers like Google Chrome and Mozilla&#8217;s Firefox also support the protocol well, making it a snap to write a trivial JavaScript client that runs in an HTML page. (We&#8217;ll get to the HTML client in a bit!)</p>
+</div>
+<div class="paragraph">
+<p>It&#8217;s trivial to speak Websockets in Spring. So far, we&#8217;ve used <code>Publisher&lt;T&gt;</code> instances to communicate HTTP requests and responses back and forth. When we use websockets, which is an asynchronous, bi-directional protocol - we&#8217;ll use.. (you guessed it!): <code>Publisher&lt;T&gt;</code> instances!</p>
+</div>
+<div class="paragraph">
+<p>We need to wire up a few objects to get Spring to work well with websockets. This is fairly boilerplate but it&#8217;s also trivial. We need a <code>HandlerMapping</code>, a <code>WebSocketHandler</code>, and a <code>WebSocketHandlerAdapter</code>.</p>
 </div>
 </div>
 </div>
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2018-09-16 20:42:52 PDT
+Last updated 2018-09-16 22:12:28 PDT
 </div>
 </div>
 </body>

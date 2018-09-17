@@ -3,26 +3,19 @@ package com.example.demo;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.log4j.Log4j2;
-import org.springframework.context.ApplicationListener;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.stereotype.Component;
-import org.springframework.util.ReflectionUtils;
 import org.springframework.web.reactive.HandlerMapping;
 import org.springframework.web.reactive.handler.SimpleUrlHandlerMapping;
 import org.springframework.web.reactive.socket.WebSocketHandler;
 import org.springframework.web.reactive.socket.WebSocketMessage;
 import org.springframework.web.reactive.socket.server.support.WebSocketHandlerAdapter;
 import reactor.core.publisher.Flux;
-import reactor.core.publisher.FluxSink;
 
 import java.util.Collections;
-import java.util.concurrent.*;
-import java.util.function.Consumer;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 
-/**
-	* @author <a href="mailto:josh@joshlong.com">Josh Long</a>
-	*/
 @Log4j2
 @Configuration
 class WebSocketConfiguration {
@@ -42,46 +35,14 @@ class WebSocketConfiguration {
 				};
 		}
 
-		@Component
-		public static class ProfileCreatedEventPublisher implements
-			ApplicationListener<ProfileCreatedEvent>,
-			Consumer<FluxSink<ProfileCreatedEvent>> {
-
-				private final Executor executor;
-				private final BlockingQueue<ProfileCreatedEvent> queue = new LinkedBlockingQueue<>();
-
-				ProfileCreatedEventPublisher(Executor executor) {
-						this.executor = executor;
-				}
-
-				@Override
-				public void onApplicationEvent(ProfileCreatedEvent event) {
-						this.queue.offer(event);
-						log.info("queue.offer(" + event + ")");
-				}
-
-				@Override
-				public void accept(FluxSink<ProfileCreatedEvent> sink) {
-						this.executor.execute(() -> {
-								while (true)
-										try {
-												log.info("take()'ing the next result...");
-												ProfileCreatedEvent event = queue.take();
-												sink.next(event);
-												log.info("sink.next(" + event + ")");
-										}
-										catch (InterruptedException e) {
-												ReflectionUtils.rethrowRuntimeException(e);
-										}
-						});
-				}
-		}
 
 		@Bean
-		WebSocketHandler webSocketHandler(ProfileCreatedEventPublisher profileCreatedEventPublisher) {
+		WebSocketHandler webSocketHandler(
+			ObjectMapper objectMapper,
+			ProfileCreatedEventPublisher profileCreatedEventPublisher) {
 
-				ObjectMapper objectMapper = new ObjectMapper();
-				Flux<ProfileCreatedEvent> publish = Flux.create(profileCreatedEventPublisher).share();// .publish().autoConnect();
+				Flux<ProfileCreatedEvent> publish = Flux.create(profileCreatedEventPublisher).share();
+
 				return session -> {
 
 						Flux<WebSocketMessage> messageFlux = publish
@@ -107,3 +68,4 @@ class WebSocketConfiguration {
 				return new WebSocketHandlerAdapter();
 		}
 }
+

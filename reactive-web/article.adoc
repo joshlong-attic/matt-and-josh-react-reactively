@@ -163,7 +163,7 @@ include::includes/tree.txt[test]
 ----
 ====
 
-Our Maven build file, `pom.xml`, is pretty plain, but it assumes we're going to use JUnit 4. Let's upgrade JUnit to use JUnit 5, which is a more modern testing framework that's well supported by Spring Framework 5 and beyond. This owes in no small part to the fact that the lead of JUnit 5, Sam Brennan, is also the lead of the Spring Test framework. Add the following dependencies to your new application's build file, `pom.xml`: `org.junit.jupiter`:`junit-jupiter-engine` and give it a `scope` of `test`. Then, exclude the `junit`:`junit` dependency from the `spring-boot-starter-test` dependency. This is   the resulting Maven `pom.xml`:
+Our Maven build file, `pom.xml`, is pretty plain, but it assumes we're going to use JUnit 4. Let's upgrade JUnit to use JUnit 5, which is a more modern testing framework that's well supported by Spring Framework 5 and beyond. This owes in no small part to the fact that the lead of JUnit 5, Sam Brennan, is also the lead of the Spring Test framework. Add the following dependencies to your new application's build file, `pom.xml`: `org.junit.jupiter`:`junit-jupiter-engine` and give it a `scope` of `test`. Then, exclude the `junit`:`junit` dependency from the `spring-boot-starter-test` dependency.  As of this writing, in September 2018, you _also_ need to manually update the version of the Failsafe and Surefire Maven plugins in your Maven build's `properties` stanza. This is the resulting Maven `pom.xml`:
 
 .`pom.xml`
 ====
@@ -433,10 +433,9 @@ Straightforward, right? I like this approach - the handler object centralizes pr
 
 === Testing the HTTTP Endpoints
 
-We've seen two implementations of the same HTTP endpoints in this application. The classic endpoints are annotated with `@Profile("classic")`  where as the functional reactive endpoints are annotated with `@Profile("default")`. If no other profile is active, any bean tagged with the `default` profile will be active. So, if you _don't_ specify `classic`, the `default` bean will activate. We should test both, even if they're just for demonstration purposes. I've extracted all the tests into a base class that I'll extend twice. Each subclass will isolate one or the other set of HTTP endpoints.
+We've seen two implementations of the same HTTP endpoints in this application. The classic endpoints are annotated with `@Profile("classic")`  where as the functional reactive endpoints are annotated with `@Profile("default")`. If no other profile is active, any bean tagged with the `default` profile will be active. So, if you _don't_ specify `classic`, the `default` bean will activate. We should test both, even if they're just for demonstration purposes. I've extracted all the tests into a base class that I'll extend twice, activating each of the two profiles to test in isolation each of the HTTP endpoint styles.
 
-First, let's look at the base class, which contains the most important aspects of testing our HTTP endpoints.
-
+First, let's look at the base class, which contains the most important aspects of testing our HTTP endpoints. This base class is `abstract` -
 
 
 .`src/test/java/com/example/demo/ProfileEndpointsBaseClass.java`
@@ -445,8 +444,30 @@ First, let's look at the base class, which contains the most important aspects o
 ----
 include::src/test/java/com/example/demo/ProfileEndpointsBaseClass.java[]
 ----
-<1>
+<1> this is a another test slice. This one will test only the web tier, ignoring all the data tier functionality.
+<2> This will also contribute a mock HTTP client, the `WebTestClient`, that we can use to exercise the HTTP endpoints. This is a _mock_ client - it will not actually issue HTTP requests over the wire. The network stack is virtual. It'll exercise our HTTP endpoints, and all the Spring machinery, without connecting a server socket.
+<3> As this is a test slice, focused only on the HTTP components in Spring, we're going to run into a problem. Our HTTP controllers depend on our service, and our service in turn depends on the reactive Spring Data MongoDB repository. The repository is part of the data tier. We use the Spring Boot annotation, `@MockBean`, to tell Spring Boot to create a Mockito-backed mock of the same type and - most importantly - to either contribute the mock to the Spring `ApplicationContext` if a bean of the same type doesn't already exist or to replace any bean of the same type with the mock in the Spring `ApplicationContext`.
+<4> Since it's just a Mockito-backed mock, we use Mockito to preprogram the stub so that it'll return the pre-programmed responses
+<5> Finally, we can use the `WebTestClient`. The `WebTestClient` lets us issue requests to our HTTP endpoints and then assert certain things about the response.
 ====
+
+The `WebTestClient` is quite powerful. It's a test-centric alternative to the reactive `WebClient` in Spring WebFlux which is an honest-to-goodness reactive HTTP client. In this  example, we make an HTTP request to an endpoint, confirm that the returned status code and headers line up with expectations, and then use  JSON Path  to poke at the structure of the returned result.
+
+> TIP: https://github.com/json-path/JsonPath[JSON Path] is like XPath, a query language for declaratively traversing nodes in an XML document. It allows easy traversal of JSON stanzas. It also provides a predicate language which we can use to match.
+
+HTTP is great for a request-reply centric interaction with a service. It makes it easy to interrogate the HTTP service and get a response. But what if we're interested in listening to events? We don't want to constantly poll - we'd rather the service tell us when something is happening. Our service supports creating and updating records. As a client to such a service, it'd be nice to have a firehose endpoint - but don't tell Twitter that! We could subscribe to such an endpoint and update the client state whenever there's a new record. We need a fully duplexed protocol to maintain a connection to the client and push data to the client from the service...
+
+== Reactive WebSockets
+
+Remember those `ApplicationEvent` instances that we published when a new record was created? Our goal now is to connect those events to websockets so that whenever a new event is published, a client gets a websocket notification.
+
+https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API[Websockets] are a  compelling option. They enable two-way communication  - client-to-service and service-to-client on a connection. The protocol is particularly relevant for our use case because it's well supported in browsers. A client connects to a server, sending an HTTP GET request to upgrade the connection to a WebSocket from a simple HTTP request. This is known as handshaking. Once the handhsake is done, clients communicate in an encoded fashion over a different protocol.  It's often used in web applications because it implies HTTP to initiate the discussion. Modern HTTP browsers like Google Chrome and Mozilla's Firefox also support the protocol well, making it a snap to write a trivial JavaScript client that runs in an HTML page. (We'll get to the HTML client in a bit!)
+
+It's trivial to speak Websockets in Spring. So far, we've used `Publisher<T>` instances to communicate HTTP requests and responses back and forth. When we use websockets, which is an asynchronous, bi-directional protocol - we'll use.. (you guessed it!): `Publisher<T>` instances!
+
+We need to wire up a few objects to get Spring to work well with websockets. This is fairly boilerplate but it's also trivial. We need a `HandlerMapping`, a `WebSocketHandler`, and a `WebSocketHandlerAdapter`.
+
+
 
 
 
