@@ -11,7 +11,7 @@ import org.springframework.test.web.reactive.server.WebTestClient;
 @ActiveProfiles("default")
 @Import({ProfileEndpointConfiguration.class,
 	ProfileHandler.class, ProfileService.class})
-public class FunctionalProfileEndpointsTest extends ProfileEndpointsBaseClass {
+public class FunctionalProfileEndpointsTest extends AbstractBaseProfileEndpoints {
 
 		@BeforeAll
 		static void before() {
