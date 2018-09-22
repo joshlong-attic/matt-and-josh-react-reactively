@@ -27,64 +27,64 @@ import java.util.concurrent.atomic.AtomicLong;
 @ExtendWith(SpringExtension.class)
 class WebSocketConfigurationTest {
 
-		// <2>
-		private final WebSocketClient socketClient = new ReactorNettyWebSocketClient();
+    // <2>
+    private final WebSocketClient socketClient = new ReactorNettyWebSocketClient();
 
-		// <3>
-		private final WebClient webClient = WebClient.builder().build();
+    // <3>
+    private final WebClient webClient = WebClient.builder().build();
 
-		// <4>
-		private Profile generateRandomProfile() {
-				return new Profile(UUID.randomUUID().toString(), UUID.randomUUID().toString() + "@email.com");
-		}
+    // <4>
+    private Profile generateRandomProfile() {
+        return new Profile(UUID.randomUUID().toString(), UUID.randomUUID().toString() + "@email.com");
+    }
 
-		@Test
-		public void testNotificationsOnUpdates() throws Exception {
+    @Test
+    public void testNotificationsOnUpdates() throws Exception {
 
-				int count = 10; // <5>
-				AtomicLong counter = new AtomicLong(); //<6>
-				URI uri = URI.create("ws://localhost:8080/ws/profiles"); //<7>
+        int count = 10; // <5>
+        AtomicLong counter = new AtomicLong(); //<6>
+        URI uri = URI.create("ws://localhost:8080/ws/profiles"); //<7>
 
-				// <8>
-				socketClient.execute(uri, (WebSocketSession session) -> {
+        // <8>
+        socketClient.execute(uri, (WebSocketSession session) -> {
 
-						// <9>
-						Mono<WebSocketMessage> out = Mono.just(session.textMessage("test"));
+            // <9>
+            Mono<WebSocketMessage> out = Mono.just(session.textMessage("test"));
 
-						// <10>
-						Flux<String> in = session
-							.receive()
-							.map(WebSocketMessage::getPayloadAsText);
+            // <10>
+            Flux<String> in = session
+                .receive()
+                .map(WebSocketMessage::getPayloadAsText);
 
-						// <11>
-						return session
-							.send(out)
-							.thenMany(in)
-							.doOnNext(str -> counter.incrementAndGet())
-							.then();
+            // <11>
+            return session
+                .send(out)
+                .thenMany(in)
+                .doOnNext(str -> counter.incrementAndGet())
+                .then();
 
-				}).subscribe();
+        }).subscribe();
 
-				// <12>
-				Flux
-					.<Profile>generate(sink -> sink.next(generateRandomProfile()))
-					.take(count)
-					.flatMap(this::write)
-					.blockLast();
+        // <12>
+        Flux
+            .<Profile>generate(sink -> sink.next(generateRandomProfile()))
+            .take(count)
+            .flatMap(this::write)
+            .blockLast();
 
-				Thread.sleep(1000);
+        Thread.sleep(1000);
 
-				Assertions.assertThat(counter.get()).isEqualTo(count); // <13>
-		}
+        Assertions.assertThat(counter.get()).isEqualTo(count); // <13>
+    }
 
-		private Publisher<Profile> write(Profile p) {
-				return
-					this.webClient
-						.post()
-						.uri("http://localhost:8080/profiles")
-						.body(BodyInserters.fromObject(p))
-						.retrieve()
-						.bodyToMono(String.class)
-						.thenReturn(p);
-		}
+    private Publisher<Profile> write(Profile p) {
+        return
+            this.webClient
+                .post()
+                .uri("http://localhost:8080/profiles")
+                .body(BodyInserters.fromObject(p))
+                .retrieve()
+                .bodyToMono(String.class)
+                .thenReturn(p);
+    }
 }

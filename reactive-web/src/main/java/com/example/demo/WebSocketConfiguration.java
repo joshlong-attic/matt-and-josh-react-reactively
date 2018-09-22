@@ -20,60 +20,59 @@ import java.util.concurrent.Executors;
 @Configuration
 class WebSocketConfiguration {
 
-		// <1>
-		@Bean
-		Executor executor() {
-				return Executors.newSingleThreadExecutor();
-		}
+    // <1>
+    @Bean
+    Executor executor() {
+        return Executors.newSingleThreadExecutor();
+    }
 
-		// <2>
-		@Bean
-		HandlerMapping handlerMapping(WebSocketHandler wsh) {
-				return new SimpleUrlHandlerMapping() {
-						{
-								// <3>
-								setUrlMap(Collections.singletonMap("/ws/profiles", wsh));
-								setOrder(10);
-						}
-				};
-		}
+    // <2>
+    @Bean
+    HandlerMapping handlerMapping(WebSocketHandler wsh) {
+        return new SimpleUrlHandlerMapping() {
+            {
+                // <3>
+                setUrlMap(Collections.singletonMap("/ws/profiles", wsh));
+                setOrder(10);
+            }
+        };
+    }
 
-		// <4>
-		@Bean
-		WebSocketHandlerAdapter webSocketHandlerAdapter() {
-				return new WebSocketHandlerAdapter();
-		}
+    // <4>
+    @Bean
+    WebSocketHandlerAdapter webSocketHandlerAdapter() {
+        return new WebSocketHandlerAdapter();
+    }
 
-		@Bean
-		WebSocketHandler webSocketHandler(
-			ObjectMapper objectMapper, // <5>
-			ProfileCreatedEventPublisher eventPublisher //<6>
-		) {
+    @Bean
+    WebSocketHandler webSocketHandler(
+        ObjectMapper objectMapper, // <5>
+        ProfileCreatedEventPublisher eventPublisher // <6>
+    ) {
 
-				Flux<ProfileCreatedEvent> publish = Flux
-					.create(eventPublisher)
-					.share(); // <7>
+        Flux<ProfileCreatedEvent> publish = Flux
+            .create(eventPublisher)
+            .share(); // <7>
 
-				return session -> {
+        return session -> {
 
-						Flux<WebSocketMessage> messageFlux = publish
-							.map(evt -> {
-									try {
-											// <8>
-											return objectMapper.writeValueAsString(evt.getSource());
-									}
-									catch (JsonProcessingException e) {
-											throw new RuntimeException(e);
-									}
-							})
-							.map(str -> {
-									log.info("sending " + str);
-									return session.textMessage(str);
-							});
+            Flux<WebSocketMessage> messageFlux = publish
+                .map(evt -> {
+                    try {
+                        // <8>
+                        return objectMapper.writeValueAsString(evt.getSource());
+                    }
+                    catch (JsonProcessingException e) {
+                        throw new RuntimeException(e);
+                    }
+                })
+                .map(str -> {
+                    log.info("sending " + str);
+                    return session.textMessage(str);
+                });
 
-						return session.send(messageFlux); // <9>
-				};
-		}
+            return session.send(messageFlux); // <9>
+        };
+    }
 
 }
-

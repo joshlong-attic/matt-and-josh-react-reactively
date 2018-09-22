@@ -21,73 +21,72 @@ import java.util.function.Predicate;
 @ExtendWith(SpringExtension.class)  //<3>
 public class ProfileServiceTest {
 
-		private final ProfileService service;
-		private final ProfileRepository repository;
+    private final ProfileService service;
+    private final ProfileRepository repository;
 
-		public ProfileServiceTest(@Autowired ProfileService service, // <4>
-																												@Autowired ProfileRepository repository) {
-				this.service = service;
-				this.repository = repository;
-		}
+    public ProfileServiceTest(@Autowired ProfileService service, // <4>
+                              @Autowired ProfileRepository repository) {
+        this.service = service;
+        this.repository = repository;
+    }
 
-		@Test // <5>
-		public void getAll() {
+    @Test // <5>
+    public void getAll() {
+        Flux<Profile> saved = repository.saveAll(Flux.just(new Profile(null, "Josh"), new Profile(null, "Matt"), new Profile(null, "Jane")));
 
-				Flux<Profile> saved = repository.saveAll(Flux.just(new Profile(null, "Josh"), new Profile(null, "Matt"), new Profile(null, "Jane")));
+        Flux<Profile> composite = service.all().thenMany(saved);
 
-				Flux<Profile> composite = service.all().thenMany(saved);
+        Predicate<Profile> match = profile -> saved.any(saveItem -> saveItem.equals(profile)).block();
 
-				Predicate<Profile> match = profile -> saved.any(saveItem -> saveItem.equals(profile)).block();
+        StepVerifier
+            .create(composite) // <6>
+            .expectNextMatches(match)  //<7>
+            .expectNextMatches(match)
+            .expectNextMatches(match)
+            .verifyComplete(); //<8>
+    }
 
-				StepVerifier
-					.create(composite) // <6>
-					.expectNextMatches(match)  //<7>
-					.expectNextMatches(match)
-					.expectNextMatches(match)
-					.verifyComplete(); //<8>
-		}
+    @Test
+    public void save() {
+        Mono<Profile> profileMono = this.service.create("email@email.com");
+        StepVerifier
+            .create(profileMono)
+            .expectNextMatches(saved -> StringUtils.hasText(saved.getId()))
+            .verifyComplete();
+    }
 
-		@Test
-		public void save() {
-				Mono<Profile> profileMono = this.service.create("email@email.com");
-				StepVerifier
-					.create(profileMono)
-					.expectNextMatches(saved -> StringUtils.hasText(saved.getId()))
-					.verifyComplete();
-		}
+    @Test
+    public void delete() {
+        String test = "test";
+        Mono<Profile> deleted = this.service
+            .create(test)
+            .flatMap(saved -> this.service.delete(saved.getId()));
+        StepVerifier
+            .create(deleted)
+            .expectNextMatches(profile -> profile.getEmail().equalsIgnoreCase(test))
+            .verifyComplete();
+    }
 
-		@Test
-		public void delete() {
-				String test = "test";
-				Mono<Profile> deleted = this.service
-					.create(test)
-					.flatMap(saved -> this.service.delete(saved.getId()));
-				StepVerifier
-					.create(deleted)
-					.expectNextMatches(profile -> profile.getEmail().equalsIgnoreCase(test))
-					.verifyComplete();
-		}
+    @Test
+    public void update() throws Exception {
+        Mono<Profile> saved = this.service
+            .create("test")
+            .flatMap(p -> this.service.update(p.getId(), "test1"));
+        StepVerifier
+            .create(saved)
+            .expectNextMatches(p -> p.getEmail().equalsIgnoreCase("test1"))
+            .verifyComplete();
+    }
 
-		@Test
-		public void update() throws Exception {
-				Mono<Profile> saved = this.service
-					.create("test")
-					.flatMap(p -> this.service.update(p.getId(), "test1"));
-				StepVerifier
-					.create(saved)
-					.expectNextMatches(p -> p.getEmail().equalsIgnoreCase("test1"))
-					.verifyComplete();
-		}
-
-		@Test
-		public void getById() {
-				String test = UUID.randomUUID().toString();
-				Mono<Profile> deleted = this.service
-					.create(test)
-					.flatMap(saved -> this.service.get(saved.getId()));
-				StepVerifier
-					.create(deleted)
-					.expectNextMatches(profile -> StringUtils.hasText(profile.getId()) && test.equalsIgnoreCase(profile.getEmail()))
-					.verifyComplete();
-		}
+    @Test
+    public void getById() {
+        String test = UUID.randomUUID().toString();
+        Mono<Profile> deleted = this.service
+            .create(test)
+            .flatMap(saved -> this.service.get(saved.getId()));
+        StepVerifier
+            .create(deleted)
+            .expectNextMatches(profile -> StringUtils.hasText(profile.getId()) && test.equalsIgnoreCase(profile.getEmail()))
+            .verifyComplete();
+    }
 }

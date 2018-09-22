@@ -12,26 +12,25 @@ import java.util.UUID;
 @Component
 @org.springframework.context.annotation.Profile("demo")// <2>
 class SampleDataInitializer
-	implements ApplicationListener<ApplicationReadyEvent> {
+    implements ApplicationListener<ApplicationReadyEvent> {
 
-		private final ProfileRepository repository; // <3>
+    private final ProfileRepository repository; // <3>
 
-		public SampleDataInitializer(ProfileRepository repository) {
-				this.repository = repository;
-		}
+    public SampleDataInitializer(ProfileRepository repository) {
+        this.repository = repository;
+    }
 
-		@Override
-		public void onApplicationEvent(ApplicationReadyEvent event) {
-
-				repository
-					.deleteAll() // <4>
-					.thenMany(
-						Flux
-							.just("A", "B", "C", "D")//<5>
-							.map(name -> new Profile(UUID.randomUUID().toString(), name + "@email.com")) //<6>
-							.flatMap(repository::save) // <7>
-					)
-					.thenMany(repository.findAll()) // <8>
-					.subscribe(profile -> log.info("saving " + profile.toString())); // <9>
-		}
+    @Override
+    public void onApplicationEvent(ApplicationReadyEvent event) {
+        repository
+            .deleteAll() // <4>
+            .thenMany(
+                Flux
+                    .just("A", "B", "C", "D")//<5>
+                    .map(name -> new Profile(UUID.randomUUID().toString(), name + "@email.com")) // <6>
+                    .flatMap(repository::save) // <7>
+            )
+            .thenMany(repository.findAll()) // <8>
+            .subscribe(profile -> log.info("saving " + profile.toString())); // <9>
+    }
 }

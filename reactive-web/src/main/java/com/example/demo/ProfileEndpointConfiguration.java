@@ -12,18 +12,17 @@ import static org.springframework.web.reactive.function.server.RouterFunctions.r
 @Configuration
 class ProfileEndpointConfiguration {
 
-		@Bean
-		RouterFunction<ServerResponse> routes(ProfileHandler handler) { // <1>
-				return route(i(GET("/profiles")), handler::all) //<2>
-					.andRoute(i(GET("/profiles/{id}")), handler::getById)
-					.andRoute(i(DELETE("/profiles/{id}")), handler::deleteById) //<3>
-					.andRoute(i(POST("/profiles")), handler::create)
-					.andRoute(i(PUT("/profiles/{id}")), handler::updateById);
-		}
+    @Bean
+    RouterFunction<ServerResponse> routes(ProfileHandler handler) { // <1>
+        return route(i(GET("/profiles")), handler::all) //<2>
+            .andRoute(i(GET("/profiles/{id}")), handler::getById)
+            .andRoute(i(DELETE("/profiles/{id}")), handler::deleteById) //<3>
+            .andRoute(i(POST("/profiles")), handler::create)
+            .andRoute(i(PUT("/profiles/{id}")), handler::updateById);
+    }
 
-		// <4>
-		private static RequestPredicate i(RequestPredicate target) {
-				return new CaseInsensitiveRequestPredicate(target);
-		}
+    // <4>
+    private static RequestPredicate i(RequestPredicate target) {
+        return new CaseInsensitiveRequestPredicate(target);
+    }
 }
-
