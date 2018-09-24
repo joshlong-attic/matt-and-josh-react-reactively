@@ -10,7 +10,7 @@ import org.springframework.test.web.reactive.server.WebTestClient;
 @Log4j2
 @Import({ProfileRestController.class, ProfileService.class})
 @ActiveProfiles("classic")
-public class ClassicProfileEndpointsTest extends ProfileEndpointsBaseClass {
+public class ClassicProfileEndpointsTest extends AbstractBaseProfileEndpoints {
 
 		@BeforeAll
 		static void before() {
